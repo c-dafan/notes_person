@@ -1,7 +1,7 @@
 
 
 <!DOCTYPE html>
-<html lang="zh-Hans" data-default-color-scheme=auto>
+<html lang="zh-CN" data-default-color-scheme=auto>
 
 
 
@@ -25,7 +25,7 @@
 <meta property="og:url" content="http://c-dafan.github.io/notes_person/2019/04/12/go_Lightsocks%E7%8E%AF%E5%A2%83%E9%85%8D%E7%BD%AE/index.html">
 <meta property="og:site_name" content="我的笔记">
 <meta property="og:description" content="你也能写个 Shadowsocks 环境搭建通过SOCKS5代理，代码见, 代码运行方法很简单，先运行server然后运行local，但是现在有个问题，如何才能让访问通过local的端口发出呢？这个可以通过浏览器设置代理ip和端口，把代理ip和端口设置成local监听的端口，然后就可以访问到local。设置方法：  这里使用的是chrome， 进入设置 进入高级设置 代理设置 这时候会弹出系统弹出">
-<meta property="og:locale">
+<meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2019-04-12T01:03:48.000Z">
 <meta property="article:modified_time" content="2019-04-12T03:55:56.000Z">
 <meta property="article:author" content="da fan">
@@ -99,7 +99,7 @@
   <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
   <div class="container">
     <a class="navbar-brand" href="/notes_person/">
-      <strong>Fluid</strong>
+      <strong>笔记</strong>
     </a>
 
     <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
@@ -119,7 +119,7 @@
             <li class="nav-item">
               <a class="nav-link" href="/notes_person/" target="_self">
                 <i class="iconfont icon-home-fill"></i>
-                <span>Home</span>
+                <span>首页</span>
               </a>
             </li>
           
@@ -128,35 +128,39 @@
           
           
           
-            <li class="nav-item">
-              <a class="nav-link" href="/notes_person/archives/" target="_self">
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" target="_self" href="javascript:;" role="button"
+                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                 <i class="iconfont icon-archive-fill"></i>
-                <span>Archives</span>
+                <span>分类</span>
               </a>
-            </li>
-          
-        
-          
-          
-          
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/notes_person/categories/" target="_self">
-                <i class="iconfont icon-category-fill"></i>
-                <span>Categories</span>
-              </a>
-            </li>
-          
-        
-          
-          
-          
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/notes_person/tags/" target="_self">
-                <i class="iconfont icon-tags-fill"></i>
-                <span>Tags</span>
-              </a>
+              <div class="dropdown-menu" aria-labelledby="navbarDropdown">
+                
+                  
+                  
+                  
+                  <a class="dropdown-item" href="/notes_person/archives/" target="_self">
+                    <i class="iconfont icon-archive-fill"></i>
+                    <span>归档</span>
+                  </a>
+                
+                  
+                  
+                  
+                  <a class="dropdown-item" href="/notes_person/categories/" target="_self">
+                    <i class="iconfont icon-category-fill"></i>
+                    <span>分类</span>
+                  </a>
+                
+                  
+                  
+                  
+                  <a class="dropdown-item" href="/notes_person/tags/" target="_self">
+                    <i class="iconfont icon-tags-fill"></i>
+                    <span>标签</span>
+                  </a>
+                
+              </div>
             </li>
           
         
@@ -167,7 +171,19 @@
             <li class="nav-item">
               <a class="nav-link" href="/notes_person/about/" target="_self">
                 <i class="iconfont icon-user-fill"></i>
-                <span>About</span>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="https://github.com/c-dafan/" target="_self">
+                <i class="iconfont icon-github-fill"></i>
+                <span>github</span>
               </a>
             </li>
           
@@ -213,7 +229,7 @@
       <span class="post-meta">
         <i class="iconfont icon-date-fill" aria-hidden="true"></i>
         <time datetime="2019-04-12 09:03" pubdate>
-          April 12, 2019 am
+          2019年4月12日 上午
         </time>
       </span>
     
@@ -224,7 +240,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          1.8k words
+          1.8k 字
         
       </span>
     
@@ -235,7 +251,7 @@
         
         
         
-          15 mins
+          15 分钟
         
       </span>
     
@@ -364,26 +380,26 @@
     <div class="license-meta">
       
         <div class="license-meta-item">
-          <div>Author</div>
+          <div>作者</div>
           <div>da fan</div>
         </div>
       
       
         <div class="license-meta-item license-meta-date">
-          <div>Posted on</div>
-          <div>April 12, 2019</div>
+          <div>发布于</div>
+          <div>2019年4月12日</div>
         </div>
       
       
       
         <div class="license-meta-item">
-          <div>Licensed under</div>
+          <div>许可协议</div>
           <div>
             
               
               
                 <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
-                  <span class="hint--top hint--rounded" aria-label="BY - Attribution">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
                     <i class="iconfont icon-cc-by"></i>
                   </span>
                 </a>
@@ -406,7 +422,7 @@
                       <a href="/notes_person/2019/04/13/python_conda%E5%A4%A7%E5%9D%91/" title="conda大坑">
                         <i class="iconfont icon-arrowleft"></i>
                         <span class="hidden-mobile">conda大坑</span>
-                        <span class="visible-mobile">Previous</span>
+                        <span class="visible-mobile">上一篇</span>
                       </a>
                     
                   </article>
@@ -415,7 +431,7 @@
                     
                       <a href="/notes_person/2019/04/10/NAT%E4%B8%80%E6%8E%A2%E7%A9%B6%E7%AB%9F/" title="NAT一探究竟">
                         <span class="hidden-mobile">NAT一探究竟</span>
-                        <span class="visible-mobile">Next</span>
+                        <span class="visible-mobile">下一篇</span>
                         <i class="iconfont icon-arrowright"></i>
                       </a>
                     
@@ -436,7 +452,7 @@
     <div id="toc">
   <p class="toc-header">
     <i class="iconfont icon-list"></i>
-    <span>Table of Contents</span>
+    <span>目录</span>
   </p>
   <div class="toc-body" id="toc-body"></div>
 </div>
@@ -492,7 +508,7 @@
   <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
     <div class="modal-content">
       <div class="modal-header text-center">
-        <h4 class="modal-title w-100 font-weight-bold">Search</h4>
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
         <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -500,7 +516,7 @@
       <div class="modal-body mx-3">
         <div class="md-form mb-5">
           <input type="text" id="local-search-input" class="form-control validate">
-          <label data-error="x" data-success="v" for="local-search-input">Keyword</label>
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
         </div>
         <div class="list-group" id="local-search-result"></div>
       </div>
@@ -678,7 +694,7 @@
   
 
   <noscript>
-    <div class="noscript-warning">Blog works best with JavaScript enabled</div>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
   </noscript>
 </body>
 </html>

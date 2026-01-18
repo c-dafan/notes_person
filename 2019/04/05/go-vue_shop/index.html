@@ -1,7 +1,7 @@
 
 
 <!DOCTYPE html>
-<html lang="zh-Hans" data-default-color-scheme=auto>
+<html lang="zh-CN" data-default-color-scheme=auto>
 
 
 
@@ -25,7 +25,7 @@
 <meta property="og:url" content="http://c-dafan.github.io/notes_person/2019/04/05/go-vue_shop/index.html">
 <meta property="og:site_name" content="我的笔记">
 <meta property="og:description" content="一个购物网站总结一个购物网站，数据库设计如下： 前端nodejs + vue-cli + Vue + Element-UI vue采用element-UI组件。记录一下体验：     vue整体体验很好，通过router和router-view可以很好的提高前端布局代码的复用性。对我这种不擅长写前端，每次写前端ctrl+c，ctrl+v的真的是非常的友好。另外，数据的绑定、一些指令也是相当的好用">
-<meta property="og:locale">
+<meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://raw.githubusercontent.com/c-dafan/Shop_GoVueWeb/master/shop/static/shop.png">
 <meta property="article:published_time" content="2019-04-05T02:44:58.000Z">
 <meta property="article:modified_time" content="2019-04-06T04:42:54.000Z">
@@ -102,7 +102,7 @@
   <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
   <div class="container">
     <a class="navbar-brand" href="/notes_person/">
-      <strong>Fluid</strong>
+      <strong>笔记</strong>
     </a>
 
     <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
@@ -122,7 +122,7 @@
             <li class="nav-item">
               <a class="nav-link" href="/notes_person/" target="_self">
                 <i class="iconfont icon-home-fill"></i>
-                <span>Home</span>
+                <span>首页</span>
               </a>
             </li>
           
@@ -131,35 +131,39 @@
           
           
           
-            <li class="nav-item">
-              <a class="nav-link" href="/notes_person/archives/" target="_self">
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" target="_self" href="javascript:;" role="button"
+                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                 <i class="iconfont icon-archive-fill"></i>
-                <span>Archives</span>
+                <span>分类</span>
               </a>
-            </li>
-          
-        
-          
-          
-          
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/notes_person/categories/" target="_self">
-                <i class="iconfont icon-category-fill"></i>
-                <span>Categories</span>
-              </a>
-            </li>
-          
-        
-          
-          
-          
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/notes_person/tags/" target="_self">
-                <i class="iconfont icon-tags-fill"></i>
-                <span>Tags</span>
-              </a>
+              <div class="dropdown-menu" aria-labelledby="navbarDropdown">
+                
+                  
+                  
+                  
+                  <a class="dropdown-item" href="/notes_person/archives/" target="_self">
+                    <i class="iconfont icon-archive-fill"></i>
+                    <span>归档</span>
+                  </a>
+                
+                  
+                  
+                  
+                  <a class="dropdown-item" href="/notes_person/categories/" target="_self">
+                    <i class="iconfont icon-category-fill"></i>
+                    <span>分类</span>
+                  </a>
+                
+                  
+                  
+                  
+                  <a class="dropdown-item" href="/notes_person/tags/" target="_self">
+                    <i class="iconfont icon-tags-fill"></i>
+                    <span>标签</span>
+                  </a>
+                
+              </div>
             </li>
           
         
@@ -170,7 +174,19 @@
             <li class="nav-item">
               <a class="nav-link" href="/notes_person/about/" target="_self">
                 <i class="iconfont icon-user-fill"></i>
-                <span>About</span>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="https://github.com/c-dafan/" target="_self">
+                <i class="iconfont icon-github-fill"></i>
+                <span>github</span>
               </a>
             </li>
           
@@ -216,7 +232,7 @@
       <span class="post-meta">
         <i class="iconfont icon-date-fill" aria-hidden="true"></i>
         <time datetime="2019-04-05 10:44" pubdate>
-          April 5, 2019 am
+          2019年4月5日 上午
         </time>
       </span>
     
@@ -227,7 +243,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          1.4k words
+          1.4k 字
         
       </span>
     
@@ -238,7 +254,7 @@
         
         
         
-          12 mins
+          12 分钟
         
       </span>
     
@@ -427,26 +443,26 @@ run         运行
     <div class="license-meta">
       
         <div class="license-meta-item">
-          <div>Author</div>
+          <div>作者</div>
           <div>da fan</div>
         </div>
       
       
         <div class="license-meta-item license-meta-date">
-          <div>Posted on</div>
-          <div>April 5, 2019</div>
+          <div>发布于</div>
+          <div>2019年4月5日</div>
         </div>
       
       
       
         <div class="license-meta-item">
-          <div>Licensed under</div>
+          <div>许可协议</div>
           <div>
             
               
               
                 <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
-                  <span class="hint--top hint--rounded" aria-label="BY - Attribution">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
                     <i class="iconfont icon-cc-by"></i>
                   </span>
                 </a>
@@ -469,7 +485,7 @@ run         运行
                       <a href="/notes_person/2019/04/07/%E9%9D%A2%E8%AF%95%E5%87%86%E5%A4%87/" title="面试准备">
                         <i class="iconfont icon-arrowleft"></i>
                         <span class="hidden-mobile">面试准备</span>
-                        <span class="visible-mobile">Previous</span>
+                        <span class="visible-mobile">上一篇</span>
                       </a>
                     
                   </article>
@@ -478,7 +494,7 @@ run         运行
                     
                       <a href="/notes_person/2017/04/25/hello/" title="hello world">
                         <span class="hidden-mobile">hello world</span>
-                        <span class="visible-mobile">Next</span>
+                        <span class="visible-mobile">下一篇</span>
                         <i class="iconfont icon-arrowright"></i>
                       </a>
                     
@@ -499,7 +515,7 @@ run         运行
     <div id="toc">
   <p class="toc-header">
     <i class="iconfont icon-list"></i>
-    <span>Table of Contents</span>
+    <span>目录</span>
   </p>
   <div class="toc-body" id="toc-body"></div>
 </div>
@@ -555,7 +571,7 @@ run         运行
   <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
     <div class="modal-content">
       <div class="modal-header text-center">
-        <h4 class="modal-title w-100 font-weight-bold">Search</h4>
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
         <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -563,7 +579,7 @@ run         运行
       <div class="modal-body mx-3">
         <div class="md-form mb-5">
           <input type="text" id="local-search-input" class="form-control validate">
-          <label data-error="x" data-success="v" for="local-search-input">Keyword</label>
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
         </div>
         <div class="list-group" id="local-search-result"></div>
       </div>
@@ -741,7 +757,7 @@ run         运行
   
 
   <noscript>
-    <div class="noscript-warning">Blog works best with JavaScript enabled</div>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
   </noscript>
 </body>
 </html>
