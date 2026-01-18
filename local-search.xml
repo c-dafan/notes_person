@@ -1,0 +1,709 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  
+  
+  
+  <entry>
+    <title>how to train a llm</title>
+    <link href="/notes_person/2026/01/18/how-to-train-a-llm/"/>
+    <url>/notes_person/2026/01/18/how-to-train-a-llm/</url>
+    
+    <content type="html"><![CDATA[]]></content>
+    
+    
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>pytorch 分布式多卡并行训练模型</title>
+    <link href="/notes_person/2020/03/24/pytorch%E5%88%86%E5%B8%83%E5%BC%8F/"/>
+    <url>/notes_person/2020/03/24/pytorch%E5%88%86%E5%B8%83%E5%BC%8F/</url>
+    
+    <content type="html"><![CDATA[<h2 id="pytorch-单机多卡训练模型"><a href="#pytorch-单机多卡训练模型" class="headerlink" title="pytorch 单机多卡训练模型"></a>pytorch 单机多卡训练模型</h2><h3 id="修改代码"><a href="#修改代码" class="headerlink" title="修改代码"></a>修改代码</h3><p>现在大部分github支持分布式训练，如果不支持需要做一下更改</p><p>需要加入参数–local_rank</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs python">parser.add_argument(<span class="hljs-string">&quot;--local_rank&quot;</span>, <span class="hljs-built_in">type</span>=<span class="hljs-built_in">int</span>, default=<span class="hljs-number">0</span>)<br></code></pre></td></tr></table></figure><p>使用local_rank初始化设备</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs python">device = torch.device(<span class="hljs-string">&#x27;cuda:&#123;&#125;&#x27;</span>.<span class="hljs-built_in">format</span>(args.local_rank))<br>torch.cuda.set_device(args.local_rank)<br>torch.distributed.init_process_group(backend=<span class="hljs-string">&quot;nccl&quot;</span>, init_method=<span class="hljs-string">&quot;env://&quot;</span>)<br></code></pre></td></tr></table></figure><p>创建数据加载器</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs python">train_sampler = DistributedSampler(train_dataset)<br>trainloader = torch.utils.data.DataLoader(train_dataset,batch_size=config.TRAIN.BATCH_SIZE_PER_GPU, shuffle=config.TRAIN.SHUFFLE <span class="hljs-keyword">and</span> train_sampler <span class="hljs-keyword">is</span> <span class="hljs-literal">None</span>,num_workers=config.WORKERS, sampler=train_sampler)<br></code></pre></td></tr></table></figure><p>创建模型</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs python">model = nn.SyncBatchNorm.convert_sync_batchnorm(model)<br>model = model.to(device)<br>model = nn.parallel.DistributedDataParallel(<br>model, device_ids=[args.local_rank], output_device=args.local_rank)<br></code></pre></td></tr></table></figure><p>网上有很多教程，这里只做粗略介绍。</p><h3 id="启动方式"><a href="#启动方式" class="headerlink" title="启动方式"></a>启动方式</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs shell">python -m torch.distributed.launch --nproc_per_node=2 train.py 参数<br></code></pre></td></tr></table></figure><p>nproc_per_node 表示GPU的个数</p><h2 id="pytorch-多机多卡训练模型"><a href="#pytorch-多机多卡训练模型" class="headerlink" title="pytorch 多机多卡训练模型"></a>pytorch 多机多卡训练模型</h2><h3 id="环境配置"><a href="#环境配置" class="headerlink" title="环境配置"></a>环境配置</h3><p>通过实验，发现需要多台机器之前相互可以ping通，才可以进行多机多卡训练。比如</p><ul><li>A主机与B主机连着同一个路由器，这样A主机与B主机是可以相互连通的。</li><li>如果在A主机下的容器主机CA，和B主机下的容器主机CB，他们之前是相互独立的，CA ping不通 CB，同样CB ping不通CA。所以需要借助一个插件weave，把A主机的docker与B主机的docker相互连通，这样CA与CB通过虚拟网关相互连通。</li></ul><h4 id="weave插件的使用"><a href="#weave插件的使用" class="headerlink" title="weave插件的使用"></a>weave插件的使用</h4><p>假如现在有3台主机A、B、C。把A当作主节点，B、C当作工作节点，要求B和C可以与A在同一局域网。</p><p>在A上运行</p><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs shell">weave launch --host A的ip地址 --ipalloc-range 10.32.0.0/12<br></code></pre></td></tr></table></figure><p>在B、C上运行</p><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs shell">weave launch --host A的ip地址<br></code></pre></td></tr></table></figure><h4 id="容器创建"><a href="#容器创建" class="headerlink" title="容器创建"></a>容器创建</h4><p>在创建容器时，需要指定网络weave，这样才可以让容器之前相互连通。</p><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs shell">nvidia-docker run -itd --net=weave --shm-size=60G --name 容器名 镜像名 /bin/bash<br></code></pre></td></tr></table></figure><p>如果需要挂载数据卷，可以使用 参数-v</p><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs shell">nvidia-docker run -itd -v /data/g9:/data --net=weave --shm-size=60G --name 容器名 镜像名 /bin/bash<br></code></pre></td></tr></table></figure><p>进入容器，通过<em>ifconfig</em>可以查看网络。</p><h3 id="pytorch运行方式"><a href="#pytorch运行方式" class="headerlink" title="pytorch运行方式"></a>pytorch运行方式</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs shell">python -m torch.distributed.launch --nproc_per_node=2  --nnodes=2 --node_rank=0 --master_addr=&quot;10.44.0.0&quot;   --master_port=6666 train.py 参数<br></code></pre></td></tr></table></figure>]]></content>
+    
+    
+    <categories>
+      
+      <category>pytorch</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>note</tag>
+      
+      <tag>deeplearning</tag>
+      
+      <tag>pytorch</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>pytorch走过的坑</title>
+    <link href="/notes_person/2019/10/06/pytorch%E8%B5%B0%E8%BF%87%E7%9A%84%E5%9D%91/"/>
+    <url>/notes_person/2019/10/06/pytorch%E8%B5%B0%E8%BF%87%E7%9A%84%E5%9D%91/</url>
+    
+    <content type="html"><![CDATA[<p>记录一下学习pytorch遇到的两大坑</p><blockquote><ul><li>zero_grad</li></ul></blockquote><p>需要收到清空历史梯度</p><blockquote><ul><li>torch.nn.CrossEntropyLoss</li></ul></blockquote><p>不用加入激活层softmax，在运算时已经加入了，如果加入softmax用nnl损失</p>]]></content>
+    
+    
+    <categories>
+      
+      <category>pytorch</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>note</tag>
+      
+      <tag>deeplearning</tag>
+      
+      <tag>pytorch</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>git_tree</title>
+    <link href="/notes_person/2019/09/24/git-tree/"/>
+    <url>/notes_person/2019/09/24/git-tree/</url>
+    
+    <content type="html"><![CDATA[<p>DownGit链接：<a href="https://www.itsvse.com/downgit/">https://www.itsvse.com/downgit/</a></p><p>现在有一个test仓库<a href="https://github.com/mygithub/test">https://github.com/mygithub/test</a><br>你要gitclone里面的tt子目录：<br>在本地的硬盘位置打开Git Bash</p><figure class="highlight jboss-cli"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs jboss-cli">git init test &amp;&amp; <span class="hljs-keyword">cd</span> test     <span class="hljs-string">//</span>新建仓库并进入文件夹<br>git config core.sparsecheckout <span class="hljs-literal">true</span> <span class="hljs-string">//</span>设置允许克隆子目录<br><br><span class="hljs-keyword">echo</span> &#x27;tt*&#x27; &gt;&gt; <span class="hljs-string">.git/info/sparse-checkout</span> <span class="hljs-string">//</span>设置要克隆的仓库的子目录路径   <span class="hljs-string">//</span>空格别漏<br><br>git remote add origin git@github.com<span class="hljs-function">:mygithub</span>/test.git  <span class="hljs-string">//</span>这里换成你要克隆的项目和库<br><br>git pull origin master    <span class="hljs-string">//</span>下载<br></code></pre></td></tr></table></figure>]]></content>
+    
+    
+    <categories>
+      
+      <category>git</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>trick</tag>
+      
+      <tag>git</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>leecode24</title>
+    <link href="/notes_person/2019/06/03/leecode24/"/>
+    <url>/notes_person/2019/06/03/leecode24/</url>
+    
+    <content type="html"><![CDATA[<p><img src="/notes_person/uploads/leecode24.PNG" alt="题目"></p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs python"><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">Solution</span>:<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">swapPairs</span>(<span class="hljs-params">self, head: ListNode</span>) -&gt; ListNode:<br>        <br>        newhead = ListNode(<span class="hljs-number">0</span>)<br>        <br>        newhead.<span class="hljs-built_in">next</span> = head<br>        <br>        l1 = newhead<br>        <span class="hljs-keyword">if</span> l1.<span class="hljs-built_in">next</span> <span class="hljs-keyword">is</span> <span class="hljs-literal">None</span>:<br>            <span class="hljs-keyword">return</span> head<br>        l2 = newhead.<span class="hljs-built_in">next</span>.<span class="hljs-built_in">next</span><br>        <span class="hljs-keyword">if</span> l2 <span class="hljs-keyword">is</span> <span class="hljs-literal">None</span>:<br>            <span class="hljs-keyword">return</span> head<br>        <span class="hljs-keyword">while</span> <span class="hljs-literal">True</span>:<br>            tmp = l1.<span class="hljs-built_in">next</span><br>            l1.<span class="hljs-built_in">next</span> = l2<br>            tmp.<span class="hljs-built_in">next</span> = l2.<span class="hljs-built_in">next</span><br>            l2.<span class="hljs-built_in">next</span> = tmp<br>            l1 = tmp<br>            <span class="hljs-keyword">if</span> l1.<span class="hljs-built_in">next</span> <span class="hljs-keyword">is</span> <span class="hljs-literal">None</span>:<br>                <span class="hljs-keyword">break</span><br>            l2 = l1.<span class="hljs-built_in">next</span>.<span class="hljs-built_in">next</span><br>            <span class="hljs-keyword">try</span>:<br>                l2.<span class="hljs-built_in">next</span><br>            <span class="hljs-keyword">except</span>:<br>                <span class="hljs-keyword">break</span><br>        <br>        <span class="hljs-keyword">return</span> newhead.<span class="hljs-built_in">next</span><br></code></pre></td></tr></table></figure>]]></content>
+    
+    
+    <categories>
+      
+      <category>leecode</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>leecode</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>leecode718</title>
+    <link href="/notes_person/2019/06/03/leecode718/"/>
+    <url>/notes_person/2019/06/03/leecode718/</url>
+    
+    <content type="html"><![CDATA[<p><img src="/notes_person/uploads/leecode718.PNG" alt="题目"></p><p>比较简单的动态规划，自己能找到状态转换关系的第一道动态规划题</p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs python"><br><span class="hljs-keyword">class</span> <span class="hljs-title class_">Solution</span>:<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">findLength</span>(<span class="hljs-params">self, A: <span class="hljs-type">List</span>[<span class="hljs-built_in">int</span>], B: <span class="hljs-type">List</span>[<span class="hljs-built_in">int</span>]</span>) -&gt; <span class="hljs-built_in">int</span>:<br>        a_len = <span class="hljs-built_in">len</span>(A)<br>        b_len = <span class="hljs-built_in">len</span>(B)<br>        dp = [[<span class="hljs-number">0</span>] * a_len <span class="hljs-keyword">for</span> _ <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(b_len)]<br>        <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(a_len):<br>            <span class="hljs-keyword">if</span> A[i] == B[<span class="hljs-number">0</span>]:<br>                dp[<span class="hljs-number">0</span>][i] = <span class="hljs-number">1</span><br>        <span class="hljs-keyword">for</span> j <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(b_len):<br>            <span class="hljs-keyword">if</span> B[j] == A[<span class="hljs-number">0</span>]:<br>                dp[j][<span class="hljs-number">0</span>] = <span class="hljs-number">1</span><br>        <br>        <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">1</span>, b_len):<br>            <span class="hljs-keyword">for</span> j <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">1</span>, a_len):<br>                <span class="hljs-keyword">if</span> A[j] == B[i]:<br>                    dp[i][j] = dp[i-<span class="hljs-number">1</span>][j-<span class="hljs-number">1</span>] + <span class="hljs-number">1</span><br>        <br>        <span class="hljs-keyword">return</span> <span class="hljs-built_in">max</span>([<span class="hljs-built_in">max</span>(x) <span class="hljs-keyword">for</span> x <span class="hljs-keyword">in</span> dp])<br></code></pre></td></tr></table></figure>]]></content>
+    
+    
+    <categories>
+      
+      <category>leecode</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>leecode</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>python_tqdm</title>
+    <link href="/notes_person/2019/05/27/python-tqdm/"/>
+    <url>/notes_person/2019/05/27/python-tqdm/</url>
+    
+    <content type="html"><![CDATA[<h2 id="进度条"><a href="#进度条" class="headerlink" title="进度条"></a>进度条</h2><h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><p><a href="https://www.jianshu.com/p/21cf48be6bf6">https://www.jianshu.com/p/21cf48be6bf6</a></p><p><a href="https://blog.csdn.net/zkp_987/article/details/81748098">https://blog.csdn.net/zkp_987&#x2F;article&#x2F;details&#x2F;81748098</a></p>]]></content>
+    
+    
+    <categories>
+      
+      <category>python</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>python</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>leecode/math50</title>
+    <link href="/notes_person/2019/05/24/leecode-math50/"/>
+    <url>/notes_person/2019/05/24/leecode-math50/</url>
+    
+    <content type="html"><![CDATA[<p><img src="/notes_person/uploads/leecode50.png" alt="题"></p><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs python"><span class="hljs-keyword">class</span> <span class="hljs-title class_">Solution</span>:<br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">myPow</span>(<span class="hljs-params">self, x: <span class="hljs-built_in">float</span>, n: <span class="hljs-built_in">int</span></span>) -&gt; <span class="hljs-built_in">float</span>:<br>        <span class="hljs-keyword">if</span> n == <span class="hljs-number">0</span>:<br>            <span class="hljs-keyword">return</span> <span class="hljs-number">1</span><br>        <span class="hljs-keyword">if</span> n &gt; <span class="hljs-number">0</span>:<br>            <span class="hljs-keyword">return</span> <span class="hljs-variable language_">self</span>.core_func(x, n)<br>        <span class="hljs-keyword">if</span> n &lt; <span class="hljs-number">0</span>:<br>            <span class="hljs-keyword">return</span> <span class="hljs-number">1</span> / <span class="hljs-variable language_">self</span>.core_func(x, -n)<br>        <br>    <span class="hljs-keyword">def</span> <span class="hljs-title function_">core_func</span>(<span class="hljs-params">self, x, n</span>):<br>        <span class="hljs-keyword">if</span> n == <span class="hljs-number">1</span>:<br>            <span class="hljs-keyword">return</span> x<br>        <span class="hljs-keyword">if</span> n % <span class="hljs-number">2</span> == <span class="hljs-number">0</span>:<br>            a = <span class="hljs-variable language_">self</span>.myPow(x, n//<span class="hljs-number">2</span>)<br>            <span class="hljs-keyword">return</span> a*a<br>        <span class="hljs-keyword">else</span>:<br>            a = <span class="hljs-variable language_">self</span>.myPow(x, n //<span class="hljs-number">2</span>)<br>            <span class="hljs-keyword">return</span> a * a * x<br></code></pre></td></tr></table></figure>]]></content>
+    
+    
+    <categories>
+      
+      <category>leecode</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>leecode</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>训练技巧总结</title>
+    <link href="/notes_person/2019/05/15/dl_train-trick/"/>
+    <url>/notes_person/2019/05/15/dl_train-trick/</url>
+    
+    <content type="html"><![CDATA[<h2 id="数据处理"><a href="#数据处理" class="headerlink" title="数据处理"></a>数据处理</h2><ul><li>数据归一化。</li><li>随机乱序，在最后抖动的时候，会很稳定</li><li>数据增强器，对于数据少的情况，尤为重要。 <a href="/05/15/dl_ImageDataGenerator">图像数据增强器的使用</a></li></ul><h2 id="模型"><a href="#模型" class="headerlink" title="模型"></a>模型</h2><ul><li>加Batch Normalization, 加Batch Normalization很管用，尤其是数据没有归一化的时候。</li><li>dropout一定程度可以防止过拟合</li></ul><h2 id="优化函数"><a href="#优化函数" class="headerlink" title="优化函数"></a>优化函数</h2><ul><li>优化函数，学习率。会影响一点</li><li>adam 好用简单，但是优化到后面就优化步长太小了</li><li>sgd 大佬专用，很多论文中，建议用sgd，但是对于我（小白），会出现loss不下降情况</li><li>学习率lr 衰减策略</li><li>学习率小一点，学习慢一点</li></ul><p><a href="https://blog.csdn.net/jiachen0212/article/details/80086926">优化函数总结</a></p>]]></content>
+    
+    
+    <categories>
+      
+      <category>deeplearn</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>deeplearn</tag>
+      
+      <tag>trick</tag>
+      
+      <tag>train</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>ImageDataGenerator</title>
+    <link href="/notes_person/2019/05/15/dl_ImageDataGenerator/"/>
+    <url>/notes_person/2019/05/15/dl_ImageDataGenerator/</url>
+    
+    <content type="html"><![CDATA[<h2 id="keras官方文档"><a href="#keras官方文档" class="headerlink" title="keras官方文档"></a><a href="https://keras.io/zh/preprocessing/image/">keras官方文档</a></h2><h2 id="使用技巧"><a href="#使用技巧" class="headerlink" title="使用技巧"></a>使用技巧</h2>]]></content>
+    
+    
+    <categories>
+      
+      <category>deeplearn</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>deeplearn</tag>
+      
+      <tag>keras</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>easy_install--打脸python爱好者</title>
+    <link href="/notes_person/2019/05/13/python_easy-install/"/>
+    <url>/notes_person/2019/05/13/python_easy-install/</url>
+    
+    <content type="html"><![CDATA[<h3 id="easy-install的使用"><a href="#easy-install的使用" class="headerlink" title="easy_install的使用"></a>easy_install的使用</h3><p>作为python爱好者，竟然不知道有easy_install 的存在，简直是打脸。习惯使用pip或者conda，从来没注意过easy_install的存在。</p><p>可能大家都遇到过一个同样的问题，pip更新失败。这是一个非常让人恶心的问题，曾一度因为pip更新失败重装python环境。</p><p>有easy_install 再也不用担心pip更新失败的问题了。</p><p>easy_install的使用：</p><blockquote><p>安装包</p></blockquote><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">easy_install pip(包名)<br></code></pre></td></tr></table></figure><blockquote><p>更新包</p></blockquote><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">easy_install -U pip(包名)<br></code></pre></td></tr></table></figure><blockquote><p>指定版本</p></blockquote><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">easy_install pip=1.19(=版本号)<br></code></pre></td></tr></table></figure><h3 id="pip更新失败，解决方案"><a href="#pip更新失败，解决方案" class="headerlink" title="pip更新失败，解决方案"></a>pip更新失败，解决方案</h3><blockquote><p>easy_install</p></blockquote><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">easy_install -U pip<br></code></pre></td></tr></table></figure><blockquote><p>conda</p></blockquote><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">conda update pip<br></code></pre></td></tr></table></figure>]]></content>
+    
+    
+    <categories>
+      
+      <category>python</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>python</tag>
+      
+      <tag>conda</tag>
+      
+      <tag>模块管理， pip</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>ocrDeepLearn</title>
+    <link href="/notes_person/2019/05/09/dl_ocrDeepLearn/"/>
+    <url>/notes_person/2019/05/09/dl_ocrDeepLearn/</url>
+    
+    <content type="html"><![CDATA[<h2 id="代码"><a href="#代码" class="headerlink" title="代码"></a>代码</h2><p><a href="https://github.com/c-dafan/CharRecognition">crnn</a></p><h2 id="相关论文"><a href="#相关论文" class="headerlink" title="相关论文"></a>相关论文</h2><p><a href="">TextBoxes:A Fast Text Detector with a Single Deep Neural Network</a></p><p><a href="">Detecting Oriented Text in Natural Images by Linking Segments</a></p><p><a href="">EAST: An Efficient and Accurate Scene Text Detector</a></p><p><a href="">PixelLink: Detecting Scene Text via Instance Segmentation</a></p><p><a href="">Gated Recurrent Convolution Neural Network forOCR</a></p><h2 id="数据集"><a href="#数据集" class="headerlink" title="数据集"></a>数据集</h2><p><a href="">ICDAR 2011</a></p><p><a href="">ICDAR 2013</a></p><p><a href="">ICDAR 2015 Incidental Text</a></p><p><a href="">Street View Text</a></p><p><a href="">SynthText</a></p><p><a href="">MSRA-TD500</a></p><p><a href="">COCO-Text </a></p><p><a href="">IIIT5K</a></p><h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p><a href="https://www.cnblogs.com/lillylin/p/6893500.html">https://www.cnblogs.com/lillylin/p/6893500.html</a></p>]]></content>
+    
+    
+    <categories>
+      
+      <category>deeplearn</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>deeplearn</tag>
+      
+      <tag>ocr</tag>
+      
+      <tag>笔记</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>goTrick</title>
+    <link href="/notes_person/2019/05/08/goTrick/"/>
+    <url>/notes_person/2019/05/08/goTrick/</url>
+    
+    <content type="html"><![CDATA[<h2 id="编译后台执行程序"><a href="#编译后台执行程序" class="headerlink" title="编译后台执行程序"></a>编译后台执行程序</h2><p>go build -ldflags “-H&#x3D;windowsgui”    example.go</p>]]></content>
+    
+    
+    <categories>
+      
+      <category>go</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>go</tag>
+      
+      <tag>trick</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>log4go用户指导</title>
+    <link href="/notes_person/2019/04/26/log4go%E7%94%A8%E6%88%B7%E6%8C%87%E5%AF%BC/"/>
+    <url>/notes_person/2019/04/26/log4go%E7%94%A8%E6%88%B7%E6%8C%87%E5%AF%BC/</url>
+    
+    <content type="html"><![CDATA[<h2 id="quick-start"><a href="#quick-start" class="headerlink" title="quick start"></a>quick start</h2><h3 id="获取"><a href="#获取" class="headerlink" title="获取"></a>获取</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">go get github.com/c-dafan/log4go<br></code></pre></td></tr></table></figure><h3 id="导入"><a href="#导入" class="headerlink" title="导入"></a>导入</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">import</span> l4g <span class="hljs-string">&quot;github.com/c-dafan/log4go&quot;</span><br></code></pre></td></tr></table></figure><h3 id="获取logger"><a href="#获取logger" class="headerlink" title="获取logger"></a>获取logger</h3><h4 id="全局-logger"><a href="#全局-logger" class="headerlink" title="全局 logger"></a>全局 logger</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs go">l4g.Info(<span class="hljs-string">&quot;hello world&quot;</span>)<br><span class="hljs-keyword">defer</span> l4g.Close()<br></code></pre></td></tr></table></figure><h4 id="新建默认logger-NewDefaultLogger"><a href="#新建默认logger-NewDefaultLogger" class="headerlink" title="新建默认logger NewDefaultLogger"></a>新建默认logger NewDefaultLogger</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs go">log := l4g.NewDefaultLogger(l4g.INFO)<br>log.Info(<span class="hljs-string">&quot;hello world&quot;</span>)<br><span class="hljs-keyword">defer</span> log.Close()<br></code></pre></td></tr></table></figure><h4 id="新建logger-l4g-Logger"><a href="#新建logger-l4g-Logger" class="headerlink" title="新建logger l4g.Logger"></a>新建logger l4g.Logger</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs go">log := <span class="hljs-built_in">make</span>(l4g.Logger)<br><span class="hljs-keyword">defer</span> log.Close()<br>log.AddFilter(<span class="hljs-string">&quot;stdout&quot;</span>, l4g.DEBUG, l4g.NewConsoleLogWriter())<br>log.Info(<span class="hljs-string">&quot;hello world&quot;</span>)<br></code></pre></td></tr></table></figure><h3 id="添加过滤器"><a href="#添加过滤器" class="headerlink" title="添加过滤器"></a>添加过滤器</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs go">log := <span class="hljs-built_in">make</span>(l4g.Logger)<br><span class="hljs-keyword">defer</span> log.Close()<br>log.AddFilter(<span class="hljs-string">&quot;stdout&quot;</span>, l4g.DEBUG, l4g.NewConsoleLogWriter())<br>log.Info(<span class="hljs-string">&quot;hello world&quot;</span>)<br></code></pre></td></tr></table></figure><p>通过AddFilter函数添加过滤器，<br>AddFilter(name, level, writer)<br>第一个参数： 过滤器名字，随意， 只要不重复就行<br>第二个参数： 日志级别<br>第三个参数： 输出器</p><h3 id="输出日志"><a href="#输出日志" class="headerlink" title="输出日志"></a>输出日志</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs go">l4g.Finest()<br>l4g.Fine()<br>l4g.Debug()<br>l4g.Trace()<br>l4g.Info()<br>l4g.Warning()<br>l4g.Error()<br>l4g.Critical()<br><br></code></pre></td></tr></table></figure><p>对应于不同级别</p><h2 id="user-guide"><a href="#user-guide" class="headerlink" title="user guide"></a>user guide</h2><h3 id="日志级别"><a href="#日志级别" class="headerlink" title="日志级别"></a>日志级别</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs go">FINEST<br>FINE<br>DEBUG<br>TRACE<br>INFO<br>WARNING<br>ERROR<br>CRITICAL<br></code></pre></td></tr></table></figure><h3 id="writer"><a href="#writer" class="headerlink" title="writer"></a>writer</h3><h4 id="输出到控制台的writer"><a href="#输出到控制台的writer" class="headerlink" title="输出到控制台的writer"></a>输出到控制台的writer</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs go">log := <span class="hljs-built_in">make</span>(l4g.Logger)<br><span class="hljs-keyword">defer</span> log.Close()<br>log.AddFilter(<span class="hljs-string">&quot;stdout&quot;</span>, l4g.DEBUG, l4g.NewConsoleLogWriter())<br>log.Info(<span class="hljs-string">&quot;hello world&quot;</span>)<br></code></pre></td></tr></table></figure><h4 id="输出到文件的writer"><a href="#输出到文件的writer" class="headerlink" title="输出到文件的writer"></a>输出到文件的writer</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs go">log := <span class="hljs-built_in">make</span>(l4g.Logger)<br>flw := l4g.NewFileLogWriter(filename, <span class="hljs-literal">false</span>)<br><br><span class="hljs-comment">// %T - Time (15:04:05 MST)</span><br><span class="hljs-comment">//       %t - Time (15:04)</span><br><span class="hljs-comment">//       %D - Date (2006/01/02)</span><br><span class="hljs-comment">//       %d - Date (01/02/06)</span><br><span class="hljs-comment">//       %L - Level (FNST, FINE, DEBG, TRAC, WARN, EROR, CRIT)</span><br><span class="hljs-comment">//       %S - Source</span><br><span class="hljs-comment">//       %M - Message</span><br><span class="hljs-comment">//       It ignores unknown format strings (and removes them)</span><br><span class="hljs-comment">//       Recommended: &quot;[%D %T] [%L] (%S) %M&quot;</span><br><br>flw.SetFormat(<span class="hljs-string">&quot;[%D %T] [%L] (%S) %M&quot;</span>)<br>flw.SetRotate(<span class="hljs-literal">false</span>)<br>flw.SetRotateSize(<span class="hljs-number">0</span>)<br>flw.SetRotateLines(<span class="hljs-number">0</span>)<br>flw.SetRotateDaily(<span class="hljs-literal">false</span>)<br>flw.SetRotateMaxBackup(<span class="hljs-number">999</span>)<br>log.AddFilter(<span class="hljs-string">&quot;file&quot;</span>, l4g.FINE, flw)<br></code></pre></td></tr></table></figure><blockquote><p>NewFileLogWriter(filename string, rotate bool)</p></blockquote><p>日志文件名字，是否多文件</p><blockquote><p>SetFormat(format string)</p></blockquote><p>设置输出格式</p><blockquote><p>flw.SetHeadFoot(head string, foot string)</p></blockquote><p>日志头和脚</p><blockquote><p>SetRotate(rotate bool)</p></blockquote><p>设置是否多文件，需要和NewFileLogWriter一致</p><blockquote><p>SetRotateSize(maxsize int)</p></blockquote><p>设置一个文件大小， 0不限制</p><blockquote><p>SetRotateLines(maxlines int)</p></blockquote><p>设置一个文件多少行， 0不限制</p><blockquote><p>SetRotateDaily(daily bool)</p></blockquote><p>每天一个日志文件</p><blockquote><p>SetRotateMaxBackup(maxbackup int)</p></blockquote><p>默认999， 最多多少个日志文件</p><h3 id="配置文件"><a href="#配置文件" class="headerlink" title="配置文件"></a>配置文件</h3><h4 id="配置文件编写"><a href="#配置文件编写" class="headerlink" title="配置文件编写"></a>配置文件编写</h4><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs xml"><span class="hljs-tag">&lt;<span class="hljs-name">logging</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">filter</span> <span class="hljs-attr">enabled</span>=<span class="hljs-string">&quot;true&quot;</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">tag</span>&gt;</span>stdout<span class="hljs-tag">&lt;/<span class="hljs-name">tag</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">type</span>&gt;</span>console<span class="hljs-tag">&lt;/<span class="hljs-name">type</span>&gt;</span><br>    <span class="hljs-comment">&lt;!-- level is (:?FINEST|FINE|DEBUG|TRACE|INFO|WARNING|ERROR) --&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">level</span>&gt;</span>DEBUG<span class="hljs-tag">&lt;/<span class="hljs-name">level</span>&gt;</span><br>  <span class="hljs-tag">&lt;/<span class="hljs-name">filter</span>&gt;</span><br>  <span class="hljs-tag">&lt;<span class="hljs-name">filter</span> <span class="hljs-attr">enabled</span>=<span class="hljs-string">&quot;true&quot;</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">tag</span>&gt;</span>file<span class="hljs-tag">&lt;/<span class="hljs-name">tag</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">type</span>&gt;</span>file<span class="hljs-tag">&lt;/<span class="hljs-name">type</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">level</span>&gt;</span>FINEST<span class="hljs-tag">&lt;/<span class="hljs-name">level</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">property</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;filename&quot;</span>&gt;</span>test&#123;&#125;.log<span class="hljs-tag">&lt;/<span class="hljs-name">property</span>&gt;</span><br>    <span class="hljs-comment">&lt;!--</span><br><span class="hljs-comment">       %T - Time (15:04:05 MST)</span><br><span class="hljs-comment">       %t - Time (15:04)</span><br><span class="hljs-comment">       %D - Date (2006/01/02)</span><br><span class="hljs-comment">       %d - Date (01/02/06)</span><br><span class="hljs-comment">       %L - Level (FNST, FINE, DEBG, TRAC, WARN, EROR, CRIT)</span><br><span class="hljs-comment">       %S - Source</span><br><span class="hljs-comment">       %M - Message</span><br><span class="hljs-comment">       It ignores unknown format strings (and removes them)</span><br><span class="hljs-comment">       Recommended: &quot;[%D %T] [%L] (%S) %M&quot;</span><br><span class="hljs-comment">    --&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">property</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;format&quot;</span>&gt;</span>[%D %T] [%L] (%S) %M<span class="hljs-tag">&lt;/<span class="hljs-name">property</span>&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">property</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;rotate&quot;</span>&gt;</span>false<span class="hljs-tag">&lt;/<span class="hljs-name">property</span>&gt;</span> <span class="hljs-comment">&lt;!-- true enables log rotation, otherwise append --&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">property</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;maxsize&quot;</span>&gt;</span>0M<span class="hljs-tag">&lt;/<span class="hljs-name">property</span>&gt;</span> <span class="hljs-comment">&lt;!-- \d+[KMG]? Suffixes are in terms of 2**10 --&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">property</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;maxlines&quot;</span>&gt;</span>0K<span class="hljs-tag">&lt;/<span class="hljs-name">property</span>&gt;</span> <span class="hljs-comment">&lt;!-- \d+[KMG]? Suffixes are in terms of thousands --&gt;</span><br>    <span class="hljs-tag">&lt;<span class="hljs-name">property</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;maxbackup&quot;</span>&gt;</span>999<span class="hljs-tag">&lt;/<span class="hljs-name">property</span>&gt;</span> <br><span class="hljs-tag">&lt;<span class="hljs-name">property</span> <span class="hljs-attr">name</span>=<span class="hljs-string">&quot;daily&quot;</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">property</span>&gt;</span> <span class="hljs-comment">&lt;!-- Automatically rotates when a log message is written after midnight --&gt;</span><br>  <span class="hljs-tag">&lt;/<span class="hljs-name">filter</span>&gt;</span><br><span class="hljs-tag">&lt;/<span class="hljs-name">logging</span>&gt;</span><br></code></pre></td></tr></table></figure><p><a href="https://github.com/c-dafan/log4go/blob/master/examples/example.json">example.json</a></p><h4 id="配置文件导入"><a href="#配置文件导入" class="headerlink" title="配置文件导入"></a>配置文件导入</h4><p><a href="https://github.com/c-dafan/log4go/blob/master/examples/XMLConfigurationExample.go">XMLConfigurationExample.go</a></p><p><a href="https://github.com/c-dafan/log4go/blob/master/examples/JsonConfigExample.go">JsonConfigExample.go</a></p><h2 id="issue"><a href="#issue" class="headerlink" title="issue"></a>issue</h2><p>日志输出用的是go线程，一旦主线程结束，go线程也会跟着结束，所以go线程中没有运行完的，会直接停止。这个样子</p>]]></content>
+    
+    
+    <categories>
+      
+      <category>go</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>go</tag>
+      
+      <tag>日志</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>图像分割学习总结</title>
+    <link href="/notes_person/2019/04/25/dl_%E5%9B%BE%E5%83%8F%E5%88%86%E5%89%B2%E5%AD%A6%E4%B9%A0%E6%80%BB%E7%BB%93/"/>
+    <url>/notes_person/2019/04/25/dl_%E5%9B%BE%E5%83%8F%E5%88%86%E5%89%B2%E5%AD%A6%E4%B9%A0%E6%80%BB%E7%BB%93/</url>
+    
+    <content type="html"><![CDATA[<p>记录一下连续写了两个肿瘤分割（图像分割）的感觉。与一路走过的坑。</p><h2 id="model"><a href="#model" class="headerlink" title="model"></a>model</h2><h3 id="fcn"><a href="#fcn" class="headerlink" title="fcn"></a>fcn</h3><p>用vgg16的权重，省去训练前几层的麻烦，但是模型很大，如果真的要训练前几层，没有个8g显存别想着训练。</p><h3 id="unet"><a href="#unet" class="headerlink" title="unet"></a>unet</h3><p>模型很大，让我很头疼，950显卡batch_size&#x3D;1也放不下，没办法，借用的1080 loss还不下降。除了最后一层，剩下的卷积层后都加上Batch Normalization，很有用。效果挺好的一个模型，相对新模型来说，采用的还是堆积式，深度相对较小，模型相对较大。</p><h3 id="densenet-fcn"><a href="#densenet-fcn" class="headerlink" title="densenet fcn"></a>densenet fcn</h3><p>模型相对挺小，至少950显卡可以训练。采用的是反卷积而不是upsample。</p><h3 id="enet"><a href="#enet" class="headerlink" title="enet"></a>enet</h3><p>模型相对挺小，效果很挺不错。</p><h2 id="loss"><a href="#loss" class="headerlink" title="loss"></a>loss</h2><h3 id="loss函数"><a href="#loss函数" class="headerlink" title="loss函数"></a>loss函数</h3><p>loss函数的定义，对结果有着很大的影响。会影响的学习方向</p><p>常见loss函数</p><ul><li>dice_loss (1 - dice) </li><li>加权loss  一般mask图中，都是1少0多</li></ul><p>使用diceloss比较好，加权的比例不好控制，diceloss关注于标注部分，比较好。</p><h3 id="loss不下降"><a href="#loss不下降" class="headerlink" title="loss不下降"></a>loss不下降</h3><p>记录下解决方案。</p><ul><li>加Batch Normalization, 加Batch Normalization很管用，尤其是数据没有归一化的时候。</li><li>数据归一化。</li><li>调整模型，和图像大小相等的featuremap最好不用</li><li>优化函数，学习率。会影响一点</li><li>随机乱序，在最后抖动的时候，会很稳定</li></ul><h2 id="数据预处理"><a href="#数据预处理" class="headerlink" title="数据预处理"></a>数据预处理</h2><h3 id="归一化"><a href="#归一化" class="headerlink" title="归一化"></a>归一化</h3><p>归一化对模型的影响，真的是很大。</p><h3 id="数据加强"><a href="#数据加强" class="headerlink" title="数据加强"></a>数据加强</h3><p>可以扩充数据</p><h3 id="随机乱序"><a href="#随机乱序" class="headerlink" title="随机乱序"></a>随机乱序</h3><p>batch——size小，并且没有随机乱序的话，模型会学习到一个局部的数据，模型鲁棒性低。随机乱序对模型有很大的作用。</p>]]></content>
+    
+    
+    <categories>
+      
+      <category>deeplearn</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>deeplearn</tag>
+      
+      <tag>总结</tag>
+      
+      <tag>训练技巧</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>go网络编程</title>
+    <link href="/notes_person/2019/04/22/goNetWorkCode/"/>
+    <url>/notes_person/2019/04/22/goNetWorkCode/</url>
+    
+    <content type="html"><![CDATA[<h2 id="连接过程"><a href="#连接过程" class="headerlink" title="连接过程"></a>连接过程</h2><h3 id="监听端口"><a href="#监听端口" class="headerlink" title="监听端口"></a>监听端口</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs go"><br>listener, err := net.Listen(<span class="hljs-string">&quot;tcp&quot;</span>, <span class="hljs-string">&quot;:8000&quot;</span>)<br><span class="hljs-keyword">defer</span> listener.Close()<br><br></code></pre></td></tr></table></figure><h3 id="客户端发送请求链接"><a href="#客户端发送请求链接" class="headerlink" title="客户端发送请求链接"></a>客户端发送请求链接</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs go"><br>conn, err := net.Dial(<span class="hljs-string">&quot;tcp&quot;</span>, <span class="hljs-string">&quot;:8000&quot;</span>)<br><span class="hljs-keyword">defer</span> conn.Close()<br><br></code></pre></td></tr></table></figure><h3 id="接受客户端请求链接"><a href="#接受客户端请求链接" class="headerlink" title="接受客户端请求链接"></a>接受客户端请求链接</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs go">conn, err := listener.Accept()<br><span class="hljs-keyword">defer</span> conn.Close()<br></code></pre></td></tr></table></figure><h3 id="接收数据"><a href="#接收数据" class="headerlink" title="接收数据"></a>接收数据</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs go">buffer := <span class="hljs-built_in">make</span>([]<span class="hljs-type">byte</span>, <span class="hljs-number">2048</span>)<br>n, err := conn.Read(buffer)<br></code></pre></td></tr></table></figure><h3 id="发送数据"><a href="#发送数据" class="headerlink" title="发送数据"></a>发送数据</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs go">n, err = conn.Write([]<span class="hljs-type">byte</span>(。。。))<br></code></pre></td></tr></table></figure><h2 id="server处理单client"><a href="#server处理单client" class="headerlink" title="server处理单client"></a>server处理单client</h2><h3 id="服务器"><a href="#服务器" class="headerlink" title="服务器"></a>服务器</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>listener, err := net.Listen(<span class="hljs-string">&quot;tcp&quot;</span>, <span class="hljs-string">&quot;:8000&quot;</span>)<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br><span class="hljs-keyword">return</span><br>&#125;<br><span class="hljs-keyword">defer</span> listener.Close()<br>buffer := <span class="hljs-built_in">make</span>([]<span class="hljs-type">byte</span>, <span class="hljs-number">2048</span>)<br>conn, err := listener.Accept()<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br>&#125;<br>fmt.Println(conn.RemoteAddr())<br>n, err := conn.Read(buffer)<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br>&#125;<br>fmt.Println(<span class="hljs-type">string</span>(buffer[:n]))<br><span class="hljs-keyword">defer</span> conn.Close()<br>&#125;<br><br></code></pre></td></tr></table></figure><h3 id="client"><a href="#client" class="headerlink" title="client"></a>client</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>conn, err := net.Dial(<span class="hljs-string">&quot;tcp&quot;</span>, <span class="hljs-string">&quot;:8000&quot;</span>)<br><span class="hljs-keyword">defer</span> conn.Close()<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br><span class="hljs-keyword">return</span><br>&#125;<br>buf := <span class="hljs-built_in">make</span>([]<span class="hljs-type">byte</span>, <span class="hljs-number">2048</span>)<br>content := <span class="hljs-string">&quot;hello world&quot;</span><br>n, err := conn.Write([]<span class="hljs-type">byte</span>(content))<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br>&#125;<br>fmt.Println(n)<br>&#125;<br><br></code></pre></td></tr></table></figure><h2 id="server并发处理多client，并保持链接状态"><a href="#server并发处理多client，并保持链接状态" class="headerlink" title="server并发处理多client，并保持链接状态"></a>server并发处理多client，并保持链接状态</h2><h3 id="server"><a href="#server" class="headerlink" title="server"></a>server</h3><p>这是使用了go开启一个线程， 当有新的client链接时，都会开启一个go程。<br>如果把go去掉，只能处理单个client，当多个client请求链接时，只有第一个和server保持链接。其余的都在等待状态。有个教学视频说会被替换，经过测试，当不使用go时，线程会被阻塞到读取的位置，只是其余的client在等待，第一个链接的不会被替换。</p><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>listener, err := net.Listen(<span class="hljs-string">&quot;tcp&quot;</span>, <span class="hljs-string">&quot;:8000&quot;</span>)<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br><span class="hljs-keyword">return</span><br>&#125;<br><span class="hljs-keyword">defer</span> listener.Close()<br><span class="hljs-keyword">for</span> &#123;<br>conn, err := listener.Accept()<br><span class="hljs-keyword">if</span> err!=<span class="hljs-literal">nil</span>&#123;<br>fmt.Println(err)<br>&#125;<br><span class="hljs-keyword">go</span> handle(conn)<br>&#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">handle</span><span class="hljs-params">(conn net.Conn)</span></span> &#123;<br>fmt.Println(conn.RemoteAddr())<br><span class="hljs-keyword">defer</span> conn.Close()<br>buffer := <span class="hljs-built_in">make</span>([]<span class="hljs-type">byte</span>, <span class="hljs-number">2048</span>)<br><span class="hljs-keyword">for</span>&#123;<br>n, err := conn.Read(buffer)<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br><span class="hljs-keyword">return</span><br>&#125;<br>content := strings.Trim(<span class="hljs-type">string</span>(buffer[:n]), <span class="hljs-string">&quot; \r\n&quot;</span>)<br>fmt.Println(n, content)<br><span class="hljs-keyword">if</span> content == <span class="hljs-string">&quot;exit&quot;</span>&#123;<br><span class="hljs-keyword">return</span><br>&#125;<br>fmt.Println(time.Now())<br>n, err = conn.Write([]<span class="hljs-type">byte</span>(time.Now().String()))<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br>&#125;<br>&#125;<br>&#125;<br></code></pre></td></tr></table></figure><h3 id="client-1"><a href="#client-1" class="headerlink" title="client"></a>client</h3><p>输入exit退出</p><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br>conn, err := net.Dial(<span class="hljs-string">&quot;tcp&quot;</span>, <span class="hljs-string">&quot;:8000&quot;</span>)<br><span class="hljs-keyword">defer</span> conn.Close()<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br><span class="hljs-keyword">return</span><br>&#125;<br><span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br><span class="hljs-keyword">for</span> &#123;<br>str := <span class="hljs-built_in">make</span>([]<span class="hljs-type">byte</span>, <span class="hljs-number">2048</span>)<br>n, err := os.Stdin.Read(str)<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span>&#123;<br>fmt.Println(err)<br><span class="hljs-keyword">return</span><br>&#125;<br>n, err = conn.Write(str[:n])<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>fmt.Println(err)<br><span class="hljs-keyword">return</span><br>&#125;<br>&#125;<br>&#125;()<br>buf := <span class="hljs-built_in">make</span>([]<span class="hljs-type">byte</span>, <span class="hljs-number">2048</span>)<br><span class="hljs-keyword">for</span>&#123;<br>n, err := conn.Read(buf)<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span>&#123;<br>fmt.Println(err)<br><span class="hljs-keyword">return</span><br>&#125;<br>fmt.Println(<span class="hljs-type">string</span>(buf[:n]))<br>&#125;<br>&#125;<br><br></code></pre></td></tr></table></figure>]]></content>
+    
+    
+    <categories>
+      
+      <category>go</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>go</tag>
+      
+      <tag>网络编程</tag>
+      
+      <tag>计算机网络</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>go并发</title>
+    <link href="/notes_person/2019/04/17/go%E5%B9%B6%E5%8F%91/"/>
+    <url>/notes_person/2019/04/17/go%E5%B9%B6%E5%8F%91/</url>
+    
+    <content type="html"><![CDATA[<h2 id="管道-channel"><a href="#管道-channel" class="headerlink" title="管道 channel"></a>管道 channel</h2><h3 id="关闭管道"><a href="#关闭管道" class="headerlink" title="关闭管道"></a>关闭管道</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>ch := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, <span class="hljs-number">3</span>)<br><span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span>&#123;<br><span class="hljs-keyword">for</span> i:=<span class="hljs-number">0</span>;i&lt;<span class="hljs-number">15</span>;i++&#123;<br>ch &lt;- i<br>&#125;<br><span class="hljs-built_in">close</span>(ch)<br>&#125;()<br><span class="hljs-comment">// for &#123;</span><br><span class="hljs-comment">// i, ok := &lt;-ch</span><br><span class="hljs-comment">// if ok&#123;</span><br><span class="hljs-comment">// fmt.Println(i)</span><br><span class="hljs-comment">// &#125;else&#123;</span><br><span class="hljs-comment">// break</span><br><span class="hljs-comment">// &#125;</span><br><span class="hljs-comment">// &#125;</span><br><span class="hljs-comment">// for i, ok := &lt;-ch; ok;i, ok = &lt;-ch &#123;</span><br><span class="hljs-comment">// fmt.Println(i)</span><br><span class="hljs-comment">// &#125;</span><br><span class="hljs-keyword">for</span> i := <span class="hljs-keyword">range</span> ch&#123;<br>fmt.Println(i)<br>&#125;<br>&#125;<br></code></pre></td></tr></table></figure><p>通过close可以关闭管道，关闭后，不能写入东西，不能读取。可以通过ok判断。也可以通过range遍历</p><h3 id="单向管道"><a href="#单向管道" class="headerlink" title="单向管道"></a>单向管道</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>ch := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br><span class="hljs-keyword">var</span> readch &lt;-<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span> = ch<br><span class="hljs-keyword">var</span> writech <span class="hljs-keyword">chan</span>&lt;- <span class="hljs-type">int</span> = ch<br><span class="hljs-comment">// writech&lt;- 0</span><br><span class="hljs-comment">// fmt.Println(&lt;-readch)</span><br><span class="hljs-comment">// readch &lt;- 0 编译不通过</span><br><span class="hljs-comment">// &lt;- writech 编译不通过</span><br><span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span>&#123;<br><span class="hljs-keyword">for</span> i:=<span class="hljs-number">0</span>;i&lt;<span class="hljs-number">20</span>;i++&#123;<br>writech &lt;- i<br>&#125;<br><span class="hljs-built_in">close</span>(ch)<br>&#125;()<br><span class="hljs-keyword">for</span> i := <span class="hljs-keyword">range</span> readch&#123;<br>fmt.Println(i)<br>&#125;<br>&#125;<br></code></pre></td></tr></table></figure><h3 id="有无缓冲管道"><a href="#有无缓冲管道" class="headerlink" title="有无缓冲管道"></a>有无缓冲管道</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>ch := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, <span class="hljs-number">5</span>)<br><span class="hljs-comment">// ch := make(chan int)</span><br><span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span>&#123;<br><span class="hljs-keyword">for</span> i:=<span class="hljs-number">0</span>;i&lt;<span class="hljs-number">10</span>;i++&#123;<br>ch &lt;- i<br>fmt.Println(<span class="hljs-string">&quot;生成：&quot;</span>,i)<br>&#125;<br><span class="hljs-built_in">close</span>(ch)<br>&#125;()<br><span class="hljs-keyword">for</span> i := <span class="hljs-keyword">range</span> ch&#123;<br>fmt.Println(<span class="hljs-string">&quot;消费：&quot;</span>,i)<br>time.Sleep(time.Second)<br>&#125;<br>&#125;<br></code></pre></td></tr></table></figure><p>可以看到有缓冲管道在装满时，阻塞。</p><h2 id="runtime的使用"><a href="#runtime的使用" class="headerlink" title="runtime的使用"></a>runtime的使用</h2><h3 id="让出时间片"><a href="#让出时间片" class="headerlink" title="让出时间片"></a>让出时间片</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br><span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br><span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>;i&lt;<span class="hljs-number">5</span>;i++&#123;<br>fmt.Println(<span class="hljs-string">&quot;go&quot;</span>)<br>&#125;<br>&#125;()<br><span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>;i&lt;<span class="hljs-number">2</span>;i++&#123;<br>fmt.Println(<span class="hljs-string">&quot;hello&quot;</span>)<br>&#125;<br>&#125;<br><br></code></pre></td></tr></table></figure><p>主线程运行结束，go协程运行没有结束，就会被自动关闭。会没有go的输出。让出时间片，就可以看到go协程的输出。</p><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br><span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> &#123;<br><span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>;i&lt;<span class="hljs-number">3</span>;i++&#123;<br>fmt.Println(<span class="hljs-string">&quot;go&quot;</span>)<br>&#125;<br>&#125;()<br><span class="hljs-keyword">for</span> i := <span class="hljs-number">0</span>;i&lt;<span class="hljs-number">2</span>;i++&#123;<br>runtime.Gosched() <span class="hljs-comment">// 让出时间片</span><br>fmt.Println(<span class="hljs-string">&quot;hello&quot;</span>)<br>&#125;<br>&#125;<br><br></code></pre></td></tr></table></figure><h3 id="退出子线程"><a href="#退出子线程" class="headerlink" title="退出子线程"></a>退出子线程</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">test</span><span class="hljs-params">()</span></span>&#123;<br><span class="hljs-keyword">defer</span> fmt.Println(<span class="hljs-string">&quot;cc&quot;</span>)<br><span class="hljs-comment">// return  </span><br><span class="hljs-comment">// runtime.Goexit()</span><br>fmt.Println(<span class="hljs-string">&quot;dd&quot;</span>)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>ch := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br><span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(ch <span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)</span></span>&#123;<br>fmt.Println(<span class="hljs-string">&quot;aa&quot;</span>)<br>test()<br>fmt.Println(<span class="hljs-string">&quot;bb&quot;</span>)<br><span class="hljs-keyword">defer</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(ch <span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)</span></span>&#123;<br>ch &lt;- <span class="hljs-number">0</span><br>&#125;(ch)<br>&#125;(ch)<br>&lt;-ch<br>&#125;<br></code></pre></td></tr></table></figure><p>输出：<br>        aa<br>        dd<br>        cc<br>        bb</p><p>取消return的注释后， 会输出：<br>        aa<br>        cc<br>        bb</p><p>由此说明，return退出的是函数</p><p>取消 runtime.Goexit() 的注释，会输出：<br>        aa<br>        cc</p><p>说明退出了整个线程</p><h3 id="最大并行数"><a href="#最大并行数" class="headerlink" title="最大并行数"></a>最大并行数</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>n := runtime.GOMAXPROCS(<span class="hljs-number">4</span>)<br>fmt.Println(n)<br><span class="hljs-keyword">for</span> &#123;<br><span class="hljs-keyword">go</span> fmt.Print(<span class="hljs-string">&quot;0&quot;</span>)<br>fmt.Print(<span class="hljs-number">1</span>)<br>&#125;<br>&#125;<br></code></pre></td></tr></table></figure><h2 id="time的使用"><a href="#time的使用" class="headerlink" title="time的使用"></a>time的使用</h2><h3 id="定时器的创建"><a href="#定时器的创建" class="headerlink" title="定时器的创建"></a>定时器的创建</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>timer := time.NewTimer(<span class="hljs-number">2</span> * time.Second)<br>fmt.Println(<span class="hljs-string">&quot;时间&quot;</span>,time.Now())<br><br>t := &lt;-timer.C<br>fmt.Println(t)<br>&#125;<br><br></code></pre></td></tr></table></figure><p>定时2秒钟。</p><h3 id="sleep"><a href="#sleep" class="headerlink" title="sleep"></a>sleep</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>fmt.Println(time.Now())<br>time.Sleep(<span class="hljs-number">2</span>* time.Second)<br>fmt.Println(time.Now())<br>&#125;<br><br><br></code></pre></td></tr></table></figure><h3 id="After"><a href="#After" class="headerlink" title="After"></a>After</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>fmt.Println(time.Now())<br>&lt;-time.After(<span class="hljs-number">2</span>*time.Second)<br>fmt.Println(time.Now())<br>&#125;<br></code></pre></td></tr></table></figure><h3 id="stop"><a href="#stop" class="headerlink" title="stop"></a>stop</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>timer := time.NewTimer(time.Second)<br><span class="hljs-keyword">go</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span>&#123;<br>&lt;-timer.C<br>fmt.Println(<span class="hljs-string">&quot;携程关闭&quot;</span>)<br>&#125;()<br><span class="hljs-comment">// timer.Stop()</span><br><span class="hljs-keyword">for</span>&#123;<br><br>&#125;<br>&#125;<br></code></pre></td></tr></table></figure><p>取消timer.Stop()的注释，子线程将不会结束。因为在stop以后，timer.C 管道中不会有信息。</p><h3 id="Reset"><a href="#Reset" class="headerlink" title="Reset"></a>Reset</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>fmt.Println(time.Now())<br>timer := time.NewTimer(<span class="hljs-number">3</span> * time.Second)<br>timer.Reset(time.Second)<br>&lt;-timer.C<br>fmt.Println(time.Now())<br>&#125;<br></code></pre></td></tr></table></figure><p>重新设置定时器时间</p><h3 id="Ticker"><a href="#Ticker" class="headerlink" title="Ticker"></a>Ticker</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>ticker := time.NewTicker(time.Second)<br>i:= <span class="hljs-number">0</span><br><span class="hljs-keyword">for</span> _ = <span class="hljs-keyword">range</span> ticker.C &#123;<br>fmt.Println(<span class="hljs-string">&quot;i=&quot;</span>,i)<br>i ++<br><span class="hljs-keyword">if</span> i ==<span class="hljs-number">5</span>&#123;<br>ticker.Stop()<br><span class="hljs-keyword">break</span><br>&#125;<br>&#125;<br>&#125;<br></code></pre></td></tr></table></figure><p>可以多次使用的定时器</p>]]></content>
+    
+    
+    <categories>
+      
+      <category>go</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>go</tag>
+      
+      <tag>并发</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>conda大坑</title>
+    <link href="/notes_person/2019/04/13/python_conda%E5%A4%A7%E5%9D%91/"/>
+    <url>/notes_person/2019/04/13/python_conda%E5%A4%A7%E5%9D%91/</url>
+    
+    <content type="html"><![CDATA[<hr><p>记录一个遇到的坑。是非常的坑的坑。 –conda的使用</p><hr><h2 id="conda坑"><a href="#conda坑" class="headerlink" title="conda坑"></a>conda坑</h2><h3 id="conda-install"><a href="#conda-install" class="headerlink" title="conda install"></a>conda install</h3><p>conda的强大，一直也听说过，只是没想到如此的强大。只是想安装一个包，把我的整个python环境全都给我替换了。</p><p>我只是想装一下gdcm，但是py37没有这个包，所以pip显示没有匹配到。本着尝试的想法，用conda install，结果把整个环境从python37升级到了py36，（没错是升级，conda是这么提醒的）。当我发现有问题时，非常的绝望，但是怂，只能静悄悄的看着进度条走了半个小时。</p><p>结果不错所料，完全不能用了。conda强大到让你绝望中，又有了希望。居然还可以回滚。见回滚使用。</p><h2 id="conda使用"><a href="#conda使用" class="headerlink" title="conda使用"></a>conda使用</h2><h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">conda install -n your_env_name [package]<br></code></pre></td></tr></table></figure><p>默认装在root下。奇坑，小心着用。</p><h3 id="创建环境"><a href="#创建环境" class="headerlink" title="创建环境"></a>创建环境</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">conda create -n your_env_name python=X.X（2.7、3.6等)<br></code></pre></td></tr></table></figure><h3 id="回滚"><a href="#回滚" class="headerlink" title="回滚"></a>回滚</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs bash">conda list --revision<br>conda install --version N  <br></code></pre></td></tr></table></figure><p>N为回退的版本。</p><p><a href="https://www.jianshu.com/p/97d3fc248cbb">参考</a></p><h2 id="pip"><a href="#pip" class="headerlink" title="pip"></a>pip</h2><p>清华：<a href="https://pypi.tuna.tsinghua.edu.cn/simple">https://pypi.tuna.tsinghua.edu.cn/simple</a></p><p>阿里云：<a href="http://mirrors.aliyun.com/pypi/simple/">http://mirrors.aliyun.com/pypi/simple/</a></p><p>中国科技大学: <a href="https://pypi.mirrors.ustc.edu.cn/simple/">https://pypi.mirrors.ustc.edu.cn/simple/</a></p><p>华中理工大学：<a href="http://pypi.hustunique.com/">http://pypi.hustunique.com/</a></p><p>山东理工大学：<a href="http://pypi.sdutlinux.org/">http://pypi.sdutlinux.org/</a> </p><p>豆瓣：<a href="http://pypi.douban.com/simple/">http://pypi.douban.com/simple/</a></p><p>以后还是使用pip</p>]]></content>
+    
+    
+    <categories>
+      
+      <category>python</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>python</tag>
+      
+      <tag>conda</tag>
+      
+      <tag>奇坑</tag>
+      
+      <tag>pip</tag>
+      
+      <tag>模块管理</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>Lightsocks环境配置</title>
+    <link href="/notes_person/2019/04/12/go_Lightsocks%E7%8E%AF%E5%A2%83%E9%85%8D%E7%BD%AE/"/>
+    <url>/notes_person/2019/04/12/go_Lightsocks%E7%8E%AF%E5%A2%83%E9%85%8D%E7%BD%AE/</url>
+    
+    <content type="html"><![CDATA[<p><a href="https://github.com/gwuhaolin/blog/issues/12">你也能写个 Shadowsocks</a></p><h2 id="环境搭建"><a href="#环境搭建" class="headerlink" title="环境搭建"></a>环境搭建</h2><p>通过SOCKS5代理，<a href="https://github.com/gwuhaolin/lightsocks">代码见</a>,</p><p>代码运行方法很简单，先运行server然后运行local，但是现在有个问题，如何才能让访问通过local的端口发出呢？<br>这个可以通过浏览器设置代理ip和端口，把代理ip和端口设置成local监听的端口，然后就可以访问到local。设置方法：</p><ul><li>这里使用的是chrome，</li><li>进入设置</li><li>进入高级设置</li><li>代理设置</li><li>这时候会弹出系统弹出窗</li><li>局域网（LAN）设置</li><li>在新的弹出窗可以看到</li></ul><p>现在可以访问local了，local也可以把数据转发到server，但是现在还有一个问题。server是直接把链接断掉，因为这个使用SOCKS5，server发现不是SOCKS5后，就丢弃了。local只是直接做了转发，需要浏览器直接设置为SOCKS5代理。</p><ul><li>这个使用的是chrome，需要一个插件</li><li>下载插件<a href="https://github.com/FelisCatus/SwitchyOmega/releases">SwitchyOmega</a></li><li>进入扩展程序，打开开发者模式，把下载的crx文件直接拖进去就可以直接安装了</li><li>进入SwitchyOmega界面，</li><li>新建模式，填写协议，ip：port</li><li>应用选项。</li></ul><h2 id="扩展功能"><a href="#扩展功能" class="headerlink" title="扩展功能"></a>扩展功能</h2><p>在代码中，可见server.go 文件。在文件中，handleConn方法主要做转发处理。所以这里对handleConn方法，这修改就可以了。</p><h3 id="输出日志"><a href="#输出日志" class="headerlink" title="输出日志"></a>输出日志</h3><p>我这里需要建立链接的日志，日志内容包括时间和源ip与目标ip。做一下修改就可以。</p><blockquote><p>首先修改securetcp中struct</p></blockquote><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> Addr <span class="hljs-keyword">interface</span> &#123;<br>Network() <span class="hljs-type">string</span> <span class="hljs-comment">// name of the network (for example, &quot;tcp&quot;, &quot;udp&quot;)</span><br>String() <span class="hljs-type">string</span>  <span class="hljs-comment">// string form of address (for example, &quot;192.0.2.1:25&quot;, &quot;[2001:db8::1]:80&quot;)</span><br>&#125;<br><br><span class="hljs-comment">// 加密传输的 TCP Socket</span><br><span class="hljs-keyword">type</span> SecureTCPConn <span class="hljs-keyword">struct</span> &#123;<br>io.ReadWriteCloser<br>Address Addr<br>Cipher *cipher<br>&#125;<br><span class="hljs-string">``</span><span class="hljs-string">``</span><br><br>&gt; 然后在这里输出local-&gt;server日志即可<br><br><span class="hljs-string">``</span><span class="hljs-string">`go</span><br><span class="hljs-string">    // 进行转发</span><br><span class="hljs-string">    // 从 localUser 读取数据发送到 dstServer</span><br><span class="hljs-string">    go func() &#123;</span><br><span class="hljs-string">        err := localConn.DecodeCopy(dstServer)</span><br><span class="hljs-string">        log.Println(time.Now(),&quot;目标地址：&quot;, dstServer.RemoteAddr(),&quot;源地址：&quot;, localConn.Address) // 增加</span><br><span class="hljs-string">        if err != nil &#123;</span><br><span class="hljs-string">            // 在 copy 的过程中可能会存在网络超时等 error 被 return，只要有一个发生了错误就退出本次工作</span><br><span class="hljs-string">            localConn.Close()</span><br><span class="hljs-string">            dstServer.Close()</span><br><span class="hljs-string">        &#125;</span><br><span class="hljs-string">    &#125;()</span><br><span class="hljs-string">`</span><span class="hljs-string">``</span><span class="hljs-string">`</span><br><span class="hljs-string"></span><br><span class="hljs-string">&gt; server -&gt; local 日志 需要做以下修改</span><br><span class="hljs-string"></span><br><span class="hljs-string">`</span><span class="hljs-string">``</span><span class="hljs-keyword">go</span><br>(&amp;SecureTCPConn&#123;<br>Cipher:          localConn.Cipher,<br>Address: dstServer.RemoteAddr(),<br>ReadWriteCloser: dstServer,<br>&#125;).EncodeCopyServer(localConn) <span class="hljs-comment">// 把EncodeCopy改为EncodeCopyServer方法</span><br></code></pre></td></tr></table></figure><blockquote><p>在securetcp创建EncodeCopyServer方法</p></blockquote><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(secureSocket *SecureTCPConn)</span></span> EncodeCopyServer(dst *SecureTCPConn) <span class="hljs-type">error</span> &#123;<br>log.Println(time.Now(),<span class="hljs-string">&quot;目标地址：&quot;</span>, dst.Address,<span class="hljs-string">&quot;源地址：&quot;</span>, secureSocket.Address)<br><span class="hljs-keyword">return</span> secureSocket.EncodeCopy(dst)<br>&#125;<br><br></code></pre></td></tr></table></figure><p>现在运行，可以看到有日志的输出。</p><h2 id="修改后代码可见github"><a href="#修改后代码可见github" class="headerlink" title="修改后代码可见github"></a>修改后代码可见<a href="https://github.com/c-dafan/lightsocks">github</a></h2>]]></content>
+    
+    
+    <categories>
+      
+      <category>计算机网络</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>go</tag>
+      
+      <tag>代理</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>NAT一探究竟</title>
+    <link href="/notes_person/2019/04/10/NAT%E4%B8%80%E6%8E%A2%E7%A9%B6%E7%AB%9F/"/>
+    <url>/notes_person/2019/04/10/NAT%E4%B8%80%E6%8E%A2%E7%A9%B6%E7%AB%9F/</url>
+    
+    <content type="html"><![CDATA[<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>一直好奇socket在内网情况下，是如何和外网链接的。<br>如果都是私有ip还好理解，可以相互通信。但是公有ip都可以用，数据是怎么返回就成了一个迷。</p><p>由于最近需要抓取内网与外网交换的数据包，涉及到了内网ip与外网ip的转化，之前用的代理软件把ip给隐藏掉了，看不到是谁发过来的信息。需要自己编写一个代理软件，涉及到socket，顺便把NAT也探究一下。</p><h2 id="NAT基本原理及应用"><a href="#NAT基本原理及应用" class="headerlink" title="NAT基本原理及应用"></a><a href="https://blog.csdn.net/u013597671/article/details/74275852">NAT基本原理及应用</a></h2><p>标题是外部链接</p><p><img src="/notes_person/uploads/natdemo.jpg" alt="nat转换图"></p><h2 id="P2P，UDP和TCP穿透NAT"><a href="#P2P，UDP和TCP穿透NAT" class="headerlink" title="P2P，UDP和TCP穿透NAT"></a><a href="https://blog.csdn.net/leisure512/article/details/4900191">P2P，UDP和TCP穿透NAT</a></h2><p>标题是外部链接</p><h2 id="搭建NAT服务器"><a href="#搭建NAT服务器" class="headerlink" title="搭建NAT服务器"></a>搭建NAT服务器</h2><p>先记下，等有了两个网卡，在尝试。</p><p><a href="https://www.cnblogs.com/wonux/p/5555953.html">Linux服务器</a></p><p><a href="https://jingyan.baidu.com/article/3c343ff7e962840d3679637b.html">Win服务器</a></p>]]></content>
+    
+    
+    <categories>
+      
+      <category>计算机网络</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>NAT</tag>
+      
+      <tag>socket</tag>
+      
+      <tag>代理</tag>
+      
+      <tag>VPN</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>网络代理分析</title>
+    <link href="/notes_person/2019/04/10/%E7%BD%91%E7%BB%9C%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90%E7%BC%96%E5%86%99/"/>
+    <url>/notes_person/2019/04/10/%E7%BD%91%E7%BB%9C%E4%BB%A3%E7%90%86%E5%88%86%E6%9E%90%E7%BC%96%E5%86%99/</url>
+    
+    <content type="html"><![CDATA[<h2 id="抓包分析"><a href="#抓包分析" class="headerlink" title="抓包分析"></a>抓包分析</h2><p><img src="/notes_person/uploads/%E6%8A%93%E5%8C%85.png" alt="数据包"></p><p>http 是通过tcp进行传输的， socket又是tcp的抽象，http直接通过socket就可以传输。<br>做代理的话，不用管http，直接socket转发就可以。http会自己根据多个tcp组装起一个完整的<br>数据。</p><p>抓包时，不小心抓到了https。https通过ssl传输。通过查找，比较同意<a href="https://www.jianshu.com/p/5ee027c51af0">这个说法</a>。<br>在https与tcp之间，SSL在技术上位于应用层，但从开发者的角度看，它是一个提供TCP服务的运输层协议。</p><p>不管怎么说，最终都是通过tcp传输。</p><h2 id="代码分析"><a href="#代码分析" class="headerlink" title="代码分析"></a>代码分析</h2><h3 id="一个轻巧的网络混淆代理-python"><a href="#一个轻巧的网络混淆代理-python" class="headerlink" title="一个轻巧的网络混淆代理-python"></a><a href="https://github.com/linw1995/lightsocks-python">一个轻巧的网络混淆代理-python</a></h3><p>python 编写，大佬就是大佬，代码不是拿来用的，简直就是<br>用来欣赏的。基本都是异步的，采用asyncio包写了很多的异步执行的方法。在代码中，网络传输用的是socket直接把数据转发，从而达到代理的作用。</p><h3 id="一个轻巧的网络混淆代理-go"><a href="#一个轻巧的网络混淆代理-go" class="headerlink" title="一个轻巧的网络混淆代理-go"></a><a href="https://github.com/gwuhaolin/lightsocks">一个轻巧的网络混淆代理-go</a></h3><p>go 编写， 想法的提出者，一篇博客详细介绍了如何编写一个<a href="https://github.com/gwuhaolin/blog/issues/12">Shadowsocks</a></p><h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>通过分析抓取的数据包与混淆代理代码，收获不少。之前一直把socket当作应用层，现在才发现socket是传输层的一个抽象，http可以直接通过socket进行传输。传输方法可以参考这<a href="https://www.jianshu.com/p/36f48b6ce223">一篇博客</a>。<br>加深了对传输透明的理解。不用管其他层做的事情，把对应层做好，就没得问题。</p><p><a href="https://www.cnblogs.com/chenliyang/p/6558756.html">http与https</a></p>]]></content>
+    
+    
+    <categories>
+      
+      <category>计算机网络</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>go</tag>
+      
+      <tag>socket</tag>
+      
+      <tag>python</tag>
+      
+      <tag>网络</tag>
+      
+      <tag>http</tag>
+      
+      <tag>tcp</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>go 爬虫</title>
+    <link href="/notes_person/2019/04/09/GoSpider/"/>
+    <url>/notes_person/2019/04/09/GoSpider/</url>
+    
+    <content type="html"><![CDATA[<h2 id="需要的"><a href="#需要的" class="headerlink" title="需要的"></a>需要的</h2><ul><li>net&#x2F;http 请求网络</li><li>正则表达式 提取内容</li><li>encode&#x2F;json 解析json</li><li>os 创建文件</li><li>并发</li></ul><h2 id="豆瓣电影评分"><a href="#豆瓣电影评分" class="headerlink" title="豆瓣电影评分"></a>豆瓣电影评分</h2><h3 id="获取请求"><a href="#获取请求" class="headerlink" title="获取请求"></a>获取请求</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><code class="hljs go">response, err := http.Get(url)<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br>    <span class="hljs-keyword">return</span><br>&#125;<br>buf := <span class="hljs-built_in">make</span>([]<span class="hljs-type">byte</span>, <span class="hljs-number">4096</span>)<br><span class="hljs-keyword">var</span> str <span class="hljs-type">string</span><br><span class="hljs-keyword">for</span> <span class="hljs-literal">true</span> &#123;<br>    n, err := response.Body.Read(buf)<br>    <span class="hljs-keyword">if</span> n == <span class="hljs-number">0</span> &#123;<br>        <span class="hljs-keyword">break</span><br>    &#125;<br>    <span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &amp;&amp; err != io.EOF &#123;<br>        <span class="hljs-keyword">return</span><br>    &#125;<br>    str += <span class="hljs-type">string</span>(buf[:n])<br>&#125;<br></code></pre></td></tr></table></figure><h3 id="正则表达式"><a href="#正则表达式" class="headerlink" title="正则表达式"></a>正则表达式</h3><p>通过正则表达式获取内容</p><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs go">reg1 := regexp.MustCompile(<span class="hljs-string">`&lt;img width=&quot;100&quot; alt=&quot;(?s:(.*?))&quot;`</span>)<br>reg2 := regexp.MustCompile(<span class="hljs-string">`&lt;span class=&quot;rating_num&quot; property=&quot;v:average&quot;&gt;(?s:(.*?))&lt;/span&gt;`</span>)<br>reg3 := regexp.MustCompile(<span class="hljs-string">`&lt;span&gt;(?s:(\d*?))人评价&lt;/span&gt;`</span>)<br>str1 := reg1.FindAllStringSubmatch(str, <span class="hljs-number">-1</span>)<br>str2 := reg2.FindAllStringSubmatch(str, <span class="hljs-number">-1</span>)<br>str3 := reg3.FindAllStringSubmatch(str, <span class="hljs-number">-1</span>)<br><span class="hljs-keyword">for</span> v := <span class="hljs-keyword">range</span> str3&#123;<br>    fmt.Println(str1[v],str2[v],str3[v])<br>&#125;<br></code></pre></td></tr></table></figure><h3 id="全部代码"><a href="#全部代码" class="headerlink" title="全部代码"></a>全部代码</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-comment">//https://movie.douban.com/top250?start=75&amp;filter=</span><br><span class="hljs-comment">// &lt;img width=&quot;100&quot; alt=&quot;</span><br><span class="hljs-comment">//&lt;span class=&quot;rating_num&quot; property=&quot;v:average&quot;&gt;8.7&lt;/span&gt;</span><br><span class="hljs-comment">// &lt;span&gt;620194人评价&lt;/span&gt;</span><br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">spider</span><span class="hljs-params">(url <span class="hljs-type">string</span>, page <span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>, v <span class="hljs-type">int</span>)</span></span> &#123;<br>response, err := http.Get(url)<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &#123;<br><span class="hljs-keyword">return</span><br>&#125;<br>buf := <span class="hljs-built_in">make</span>([]<span class="hljs-type">byte</span>, <span class="hljs-number">4096</span>)<br><span class="hljs-keyword">var</span> str <span class="hljs-type">string</span><br><span class="hljs-keyword">for</span> <span class="hljs-literal">true</span> &#123;<br>n, err := response.Body.Read(buf)<br><span class="hljs-keyword">if</span> n == <span class="hljs-number">0</span> &#123;<br><span class="hljs-keyword">break</span><br>&#125;<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &amp;&amp; err != io.EOF &#123;<br><span class="hljs-keyword">return</span><br>&#125;<br>str += <span class="hljs-type">string</span>(buf[:n])<br>&#125;<br>reg1 := regexp.MustCompile(<span class="hljs-string">`&lt;img width=&quot;100&quot; alt=&quot;(?s:(.*?))&quot;`</span>)<br>reg2 := regexp.MustCompile(<span class="hljs-string">`&lt;span class=&quot;rating_num&quot; property=&quot;v:average&quot;&gt;(?s:(.*?))&lt;/span&gt;`</span>)<br>reg3 := regexp.MustCompile(<span class="hljs-string">`&lt;span&gt;(?s:(\d*?))人评价&lt;/span&gt;`</span>)<br>str1 := reg1.FindAllStringSubmatch(str, <span class="hljs-number">-1</span>)<br>str2 := reg2.FindAllStringSubmatch(str, <span class="hljs-number">-1</span>)<br>str3 := reg3.FindAllStringSubmatch(str, <span class="hljs-number">-1</span>)<br><span class="hljs-keyword">for</span> v := <span class="hljs-keyword">range</span> str3&#123;<br>fmt.Println(str1[v],str2[v],str3[v])<br>&#125;<br><span class="hljs-keyword">defer</span> response.Body.Close()<br>page &lt;- v<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">working</span><span class="hljs-params">(start <span class="hljs-type">int</span>, end <span class="hljs-type">int</span>)</span></span> &#123;<br>page := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br><span class="hljs-keyword">for</span> v := start; v &lt;= end; v++ &#123;<br>url := fmt.Sprintf(<span class="hljs-string">&quot;https://movie.douban.com/top250?start=%d&amp;filter=&quot;</span>, v*<span class="hljs-number">25</span>)<br><span class="hljs-keyword">go</span> spider(url, page, v)<br>&#125;<br><span class="hljs-keyword">for</span> v := start; v &lt;= end; v++ &#123;<br>fmt.Println(&lt;-page)<br>&#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br><span class="hljs-keyword">var</span> start, end <span class="hljs-type">int</span><br>fmt.Scan(&amp;start)<br>fmt.Scan(&amp;end)<br>working(start, end)<br>&#125;<br><br></code></pre></td></tr></table></figure><h2 id="斗鱼"><a href="#斗鱼" class="headerlink" title="斗鱼"></a>斗鱼</h2><p>斗鱼通过后端传json到前端，然后解析json，在前端显示。请求部分同上</p><h3 id="json解析部分"><a href="#json解析部分" class="headerlink" title="json解析部分"></a>json解析部分</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs go">jsonContent:=<span class="hljs-built_in">make</span>(<span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]<span class="hljs-keyword">interface</span>&#123;&#125;)<br>_ = json.Unmarshal([]<span class="hljs-type">byte</span>(str),&amp;jsonContent)<br>data := jsonContent[<span class="hljs-string">&quot;data&quot;</span>]<br>data2 := data.(<span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]<span class="hljs-keyword">interface</span>&#123;&#125;)<br>data3 := data2[<span class="hljs-string">&quot;rl&quot;</span>].([]<span class="hljs-keyword">interface</span>&#123;&#125;)<br><span class="hljs-keyword">for</span> v := <span class="hljs-keyword">range</span> data3&#123;<br>    fmt.Println(data3[v].(<span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]<span class="hljs-keyword">interface</span>&#123;&#125;)[<span class="hljs-string">&quot;rs16&quot;</span>])<br>&#125;<br></code></pre></td></tr></table></figure><p>json解析需要成一个string:interface{}的字典。空接口类型需要自己断言。一层一层找到需要的数据。</p><h3 id="全部代码-1"><a href="#全部代码-1" class="headerlink" title="全部代码"></a>全部代码</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-keyword">import</span> (<br><span class="hljs-string">&quot;encoding/json&quot;</span><br><span class="hljs-string">&quot;fmt&quot;</span><br><span class="hljs-string">&quot;io&quot;</span><br><span class="hljs-string">&quot;net/http&quot;</span><br><span class="hljs-string">&quot;strconv&quot;</span><br>)<br><br><span class="hljs-comment">// https://www.douyu.com/gapi/rknc/directory/yzRec/4</span><br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">spider</span><span class="hljs-params">(v <span class="hljs-type">int</span>, page <span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)</span></span>  &#123;<br>url := <span class="hljs-string">&quot;https://www.douyu.com/gapi/rknc/directory/yzRec/&quot;</span>+strconv.Itoa(v)<br>response, err := http.Get(url)<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span>&#123;<br>page &lt;- v<br><span class="hljs-keyword">return</span><br>&#125;<br><span class="hljs-keyword">var</span> str <span class="hljs-type">string</span><br>buf := <span class="hljs-built_in">make</span>([]<span class="hljs-type">byte</span>, <span class="hljs-number">4096</span>)<br><span class="hljs-keyword">for</span> <span class="hljs-literal">true</span> &#123;<br>n, err:= response.Body.Read(buf)<br><span class="hljs-keyword">if</span> n == <span class="hljs-number">0</span> &#123;<br><span class="hljs-keyword">break</span><br>&#125;<br><span class="hljs-keyword">if</span> err != <span class="hljs-literal">nil</span> &amp;&amp; err != io.EOF &#123;<br>page &lt;- v<br><span class="hljs-keyword">return</span><br>&#125;<br>str += <span class="hljs-type">string</span>(buf[:n])<br>&#125;<br><span class="hljs-keyword">defer</span> response.Body.Close()<br><br><span class="hljs-comment">//json.Unmarshal([]byte(str), )</span><br><span class="hljs-comment">//reg := regexp.MustCompile(`(https://rpic.douyucdn.cn/live-cover/.*?)&quot;`)</span><br><span class="hljs-comment">//pngs := reg.FindAllStringSubmatch(str, -1)</span><br><span class="hljs-comment">//for v:= range pngs&#123;</span><br><span class="hljs-comment">//fmt.Println(pngs[v])</span><br><span class="hljs-comment">//&#125;</span><br>jsonContent:=<span class="hljs-built_in">make</span>(<span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]<span class="hljs-keyword">interface</span>&#123;&#125;)<br>_ = json.Unmarshal([]<span class="hljs-type">byte</span>(str),&amp;jsonContent)<br>data := jsonContent[<span class="hljs-string">&quot;data&quot;</span>]<br>data2 := data.(<span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]<span class="hljs-keyword">interface</span>&#123;&#125;)<br>data3 := data2[<span class="hljs-string">&quot;rl&quot;</span>].([]<span class="hljs-keyword">interface</span>&#123;&#125;)<br><span class="hljs-keyword">for</span> v := <span class="hljs-keyword">range</span> data3&#123;<br>fmt.Println(data3[v].(<span class="hljs-keyword">map</span>[<span class="hljs-type">string</span>]<span class="hljs-keyword">interface</span>&#123;&#125;)[<span class="hljs-string">&quot;rs16&quot;</span>])<br>&#125;<br>page &lt;- v<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">DouSpider</span><span class="hljs-params">(start <span class="hljs-type">int</span>, end <span class="hljs-type">int</span>)</span></span>  &#123;<br>page := <span class="hljs-built_in">make</span>(<span class="hljs-keyword">chan</span> <span class="hljs-type">int</span>)<br><span class="hljs-keyword">for</span> v := start; v &lt;= end; v++ &#123;<br><span class="hljs-keyword">go</span> spider(v, page)<br>&#125;<br><span class="hljs-keyword">for</span> v := start; v &lt;= end; v++ &#123;<br>fmt.Println(&lt;-page)<br>&#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> &#123;<br><span class="hljs-keyword">var</span> start, end <span class="hljs-type">int</span><br>fmt.Scan(&amp;start)<br>fmt.Scan(&amp;end)<br>DouSpider(start, end)<br>&#125;<br><br></code></pre></td></tr></table></figure>]]></content>
+    
+    
+    <categories>
+      
+      <category>go</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>go</tag>
+      
+      <tag>spider</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>GoNote</title>
+    <link href="/notes_person/2019/04/09/GoNote/"/>
+    <url>/notes_person/2019/04/09/GoNote/</url>
+    
+    <content type="html"><![CDATA[<h2 id="函数类型-匿名函数"><a href="#函数类型-匿名函数" class="headerlink" title="函数类型 匿名函数"></a>函数类型 匿名函数</h2><p>go 函数也是一种类型，用于声明变量，接收变量值</p><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">package</span> main<br><span class="hljs-keyword">import</span> <span class="hljs-string">&quot;fmt&quot;</span><br><span class="hljs-keyword">type</span> myFunc <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(a <span class="hljs-type">int</span>, b <span class="hljs-type">int</span>)</span></span> <span class="hljs-type">int</span><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>    <span class="hljs-keyword">var</span> myfunc myFunc<br>    myfunc = <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(a <span class="hljs-type">int</span>, b <span class="hljs-type">int</span>)</span></span> <span class="hljs-type">int</span> &#123;<br>        <span class="hljs-keyword">return</span> a+b<br>    &#125;<br>    fmt.Println(myfunc(<span class="hljs-number">1</span>,<span class="hljs-number">2</span>))<br>&#125;<br></code></pre></td></tr></table></figure><h2 id="回调函数"><a href="#回调函数" class="headerlink" title="回调函数"></a>回调函数</h2><p>把函数当作一个参数</p><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> myFunc <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(a <span class="hljs-type">int</span>, b <span class="hljs-type">int</span>)</span></span> <span class="hljs-type">int</span><br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">calu</span><span class="hljs-params">(a <span class="hljs-type">int</span>, b <span class="hljs-type">int</span>, myfunc myFunc)</span></span> <span class="hljs-type">int</span> &#123;<br>    <span class="hljs-keyword">return</span> myfunc(a, b)<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>    <span class="hljs-keyword">var</span> myfunc myFunc<br>    myfunc = <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">(a <span class="hljs-type">int</span>, b <span class="hljs-type">int</span>)</span></span> <span class="hljs-type">int</span> &#123;<br>        <span class="hljs-keyword">return</span> a+b<br>    &#125;<br>    fmt.Println(calu(<span class="hljs-number">1</span>,<span class="hljs-number">2</span>, myfunc))<br>&#125;<br></code></pre></td></tr></table></figure><h2 id="闭包"><a href="#闭包" class="headerlink" title="闭包"></a>闭包</h2><p>闭包中变量，一直存在</p><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">test02</span><span class="hljs-params">()</span></span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> <span class="hljs-type">int</span>&#123;<br>    vv := <span class="hljs-number">1</span><br>    <span class="hljs-keyword">return</span> <span class="hljs-function"><span class="hljs-keyword">func</span><span class="hljs-params">()</span></span> <span class="hljs-type">int</span>&#123;<br>        vv++<br>    <span class="hljs-keyword">return</span> vv <br>    &#125;<br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>&#123;<br>    f := test02()<br>    fmt.Println(f())<br>    fmt.Println(f())<br>&#125;<br></code></pre></td></tr></table></figure><h2 id="匿名导入"><a href="#匿名导入" class="headerlink" title="匿名导入"></a>匿名导入</h2><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">import</span> _ <span class="hljs-string">&quot;fmt&quot;</span><br></code></pre></td></tr></table></figure><p>执行init函数</p><h2 id="匿名字段"><a href="#匿名字段" class="headerlink" title="匿名字段"></a>匿名字段</h2><p>继承</p><h3 id="定义与初始化"><a href="#定义与初始化" class="headerlink" title="定义与初始化"></a>定义与初始化</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-keyword">type</span> people <span class="hljs-keyword">struct</span>&#123;<br>    name <span class="hljs-type">string</span><br>    age <span class="hljs-type">int</span><br>    sex <span class="hljs-type">byte</span><br>&#125;<br><br><span class="hljs-keyword">type</span> student <span class="hljs-keyword">struct</span>&#123;<br>    people<br>    id <span class="hljs-type">int</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>  &#123;<br>    s := student&#123;people&#123;<span class="hljs-string">&quot;aa&quot;</span>,<span class="hljs-number">16</span>,<span class="hljs-string">&#x27;m&#x27;</span>&#125;,<span class="hljs-number">150706</span>&#125;<br>    fmt.Println(s)<br>    s2 := student&#123;people:people&#123;name:<span class="hljs-string">&quot;bb&quot;</span>&#125;    id:<span class="hljs-number">160706</span>&#125;<br>    fmt.Println(s2)<br>    <span class="hljs-comment">// s3 := student&#123;&quot;aa&quot;,16,&#x27;m&#x27;,150706&#125; 错误用法</span><br>    s4 := student&#123;&#125;<br>    s4.id = <span class="hljs-number">170706</span><br>    s4.name = <span class="hljs-string">&quot;cc&quot;</span><br>    s4.age = <span class="hljs-number">17</span><br>    s4.sex = <span class="hljs-string">&#x27;m&#x27;</span><br>    fmt.Println(s4)<br>&#125;<br></code></pre></td></tr></table></figure><h3 id="非结构字段"><a href="#非结构字段" class="headerlink" title="非结构字段"></a>非结构字段</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs go"><br><span class="hljs-keyword">type</span> people <span class="hljs-keyword">struct</span>&#123;<br>    name <span class="hljs-type">string</span><br>    age <span class="hljs-type">int</span><br>    sex <span class="hljs-type">byte</span><br>&#125;<br><br><span class="hljs-keyword">type</span> student <span class="hljs-keyword">struct</span>&#123;<br>    people<br>    <span class="hljs-type">int</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>  &#123;<br>    s := student&#123;people&#123;<span class="hljs-string">&quot;aa&quot;</span>,<span class="hljs-number">16</span>,<span class="hljs-string">&#x27;m&#x27;</span>&#125;,<span class="hljs-number">150706</span>&#125;<br>    fmt.Println(s)<br>    s4 := student&#123;&#125;<br>    s4.<span class="hljs-type">int</span> = <span class="hljs-number">170706</span><br>    s4.name = <span class="hljs-string">&quot;cc&quot;</span><br>    s4.age = <span class="hljs-number">17</span><br>    s4.sex = <span class="hljs-string">&#x27;m&#x27;</span><br>    fmt.Println(s4)<br>&#125;<br></code></pre></td></tr></table></figure><h3 id="同名字段"><a href="#同名字段" class="headerlink" title="同名字段"></a>同名字段</h3><p>就近原则</p><h2 id="方法"><a href="#方法" class="headerlink" title="方法"></a>方法</h2><h3 id="值与引用"><a href="#值与引用" class="headerlink" title="值与引用"></a>值与引用</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> people <span class="hljs-keyword">struct</span>&#123;<br>    name <span class="hljs-type">string</span><br>    age <span class="hljs-type">int</span><br>    sex <span class="hljs-type">byte</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(this *people)</span></span> setinfoPointer()&#123;<br>    this.name = <span class="hljs-string">&quot;a&quot;</span><br>    this.age = <span class="hljs-number">12</span><br>    this.sex = <span class="hljs-string">&#x27;m&#x27;</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-params">(this people)</span></span> setinfo()&#123;<br>    this.name = <span class="hljs-string">&quot;a&quot;</span><br>    this.age = <span class="hljs-number">12</span><br>    this.sex = <span class="hljs-string">&#x27;m&#x27;</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>  &#123;<br>    p := people&#123;&#125;<br>    p.setinfo() <span class="hljs-comment">// 无效</span><br>    fmt.Println(p)<br>    p.setinfoPointer()<br>    fmt.Println(p)<br>&#125;<br></code></pre></td></tr></table></figure><h2 id="接口"><a href="#接口" class="headerlink" title="接口"></a>接口</h2><h3 id="空接口-类型断言"><a href="#空接口-类型断言" class="headerlink" title="空接口 类型断言"></a>空接口 类型断言</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> people <span class="hljs-keyword">struct</span>&#123;<br>    name <span class="hljs-type">string</span><br>    age <span class="hljs-type">int</span><br>    sex <span class="hljs-type">byte</span><br>&#125;<br><br><span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span>  &#123;<br>    ii := <span class="hljs-built_in">make</span>([]<span class="hljs-keyword">interface</span>&#123;&#125;, <span class="hljs-number">3</span>)<br>    ii[<span class="hljs-number">0</span>] = <span class="hljs-number">1</span><br>    ii[<span class="hljs-number">1</span>] = <span class="hljs-string">&quot;2&quot;</span><br>    ii[<span class="hljs-number">2</span>] = people&#123;name:<span class="hljs-string">&quot;3&quot;</span>&#125;<br>    <span class="hljs-keyword">for</span> _,d := <span class="hljs-keyword">range</span> ii &#123;<br>        <span class="hljs-keyword">if</span> val, ok:=d.(<span class="hljs-type">int</span>); ok&#123;<br>            fmt.Println(<span class="hljs-string">&quot;int&quot;</span>,val)<br>        &#125;<span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> val, ok:=d.(<span class="hljs-type">string</span>); ok&#123;<br>            fmt.Println(<span class="hljs-string">&quot;string&quot;</span>,val)<br>        &#125;<span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> val, ok:=d.(people); ok&#123;<br>            fmt.Println(<span class="hljs-string">&quot;people&quot;</span>,val)<br>        &#125;<br>    &#125;<br>    <span class="hljs-keyword">for</span> _,d := <span class="hljs-keyword">range</span> ii &#123;<br>        <span class="hljs-keyword">switch</span> value := d.(<span class="hljs-keyword">type</span>) &#123;<br>        <span class="hljs-keyword">case</span> <span class="hljs-type">int</span>:<br>            fmt.Println(<span class="hljs-string">&quot;int&quot;</span>,value)<br>        <span class="hljs-keyword">case</span> <span class="hljs-type">string</span>:<br>            fmt.Println(<span class="hljs-string">&quot;string&quot;</span>,value)<br>        <span class="hljs-keyword">case</span> people:<br>            fmt.Println(<span class="hljs-string">&quot;people&quot;</span>,value)<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>]]></content>
+    
+    
+    <categories>
+      
+      <category>go</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>go</tag>
+      
+      <tag>note</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>面试准备</title>
+    <link href="/notes_person/2019/04/07/%E9%9D%A2%E8%AF%95%E5%87%86%E5%A4%87/"/>
+    <url>/notes_person/2019/04/07/%E9%9D%A2%E8%AF%95%E5%87%86%E5%A4%87/</url>
+    
+    <content type="html"><![CDATA[<h1 id="面试前准备"><a href="#面试前准备" class="headerlink" title="面试前准备"></a>面试前准备</h1><hr><h2 id="python"><a href="#python" class="headerlink" title="python"></a>python</h2><p><a href="https://github.com/kenwoodjw/python_interview_question">python面试题</a></p><h2 id="java"><a href="#java" class="headerlink" title="java"></a>java</h2><p><a href="https://github.com/guanzhenxing/java_interview_manual">java面试题</a></p><h2 id="redis"><a href="#redis" class="headerlink" title="redis"></a>redis</h2><p><a href="http://www.runoob.com/redis/redis-tutorial.html">redis入门</a></p><h2 id="rabbitmq"><a href="#rabbitmq" class="headerlink" title="rabbitmq"></a>rabbitmq</h2><p><a href="https://www.cnblogs.com/shenyixin/p/9084249.html">rabbitmq复习</a></p><p><a href="https://www.cnblogs.com/frankyou/p/5283539.html">rabbitmq复习</a></p><h2 id="springboot"><a href="#springboot" class="headerlink" title="springboot"></a>springboot</h2><p><a href="https://blog.csdn.net/zl1zl2zl3/article/details/83715633">springboot</a><br><a href="https://www.cnblogs.com/3xmq/p/springboot.html">springboot</a></p><h2 id="go"><a href="#go" class="headerlink" title="go"></a>go</h2><p><a href="https://blog.csdn.net/itcastcpp/article/details/80462619">golang</a></p><p><a href="http://www.imooc.com/article/264183">go</a></p>]]></content>
+    
+    
+    <categories>
+      
+      <category>面试</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>python</tag>
+      
+      <tag>java</tag>
+      
+      <tag>redis</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>shop_go_vue</title>
+    <link href="/notes_person/2019/04/05/go-vue_shop/"/>
+    <url>/notes_person/2019/04/05/go-vue_shop/</url>
+    
+    <content type="html"><![CDATA[<h1 id="一个购物网站总结"><a href="#一个购物网站总结" class="headerlink" title="一个购物网站总结"></a>一个购物网站总结</h1><p>一个购物网站，数据库设计如下：<br><img src="https://raw.githubusercontent.com/c-dafan/Shop_GoVueWeb/master/shop/static/shop.png" alt="数据库"></p><p>前端nodejs + vue-cli + Vue + Element-UI</p><h2 id="vue"><a href="#vue" class="headerlink" title="vue"></a>vue</h2><p>采用element-UI组件。记录一下体验：</p><pre><code class="hljs">    vue整体体验很好，通过router和router-view可以很好的提高前端布局代码的复用性。对我这种不擅长写前端，每次写前端ctrl+c，ctrl+v的真的是非常的友好。另外，数据的绑定、一些指令也是相当的好用    使用vue-cli工具，需要借助nodejs，可以实现前后端的分离。在vue-cli的工程上，目录结构很清晰，很容易写一个前端。不过需要一些nodejs的知识，不然学起来真的很难受。    element-UI组件很好使用，不用懂很多css也能写出来很漂亮页面，有种纯写html最后得到带css效果的页面。</code></pre><p>笔记：</p><blockquote><p>父子组件通信</p></blockquote><ul><li><p>v-model 数据双向绑定</p></li><li><p>v-on （@）事件</p></li><li><p>v-bind （:） 数据单向绑定</p></li></ul><blockquote><p>内置指令</p></blockquote><ul><li><p>v-if、v-else、v-else-if 条件</p></li><li><p>v-for 循环 （o, i） in objs 其中i是索引，这个顺序好像和我见过的大部分语言相反</p></li></ul><blockquote><p>函数</p></blockquote><ul><li><p>created</p></li><li><p>watch 一直观察这个变量</p></li><li><p>computed 一个变量通过函数结算出来</p></li></ul><blockquote><p>slot、props、scope</p></blockquote><ul><li><p>slot 插槽</p></li><li><p>scope</p></li><li><p>props</p></li></ul><h2 id="beego"><a href="#beego" class="headerlink" title="beego"></a>beego</h2><p>beego体验：</p><pre><code class="hljs">    beego从入门到放弃，没有重新运行解决不了的问题，beego基于mvc三层的一个框架，只要学过其他语言的WEB，入手还是很容易的。    学习go语言一天，入手beego，本着练习go语言的原则，写了这个项目。    beego有个bee工具，使用起来很容易。bee generate 几乎直接把真的网站的代码都写完了，需要改一些逻辑。生成的controller中GetAll也太恨了，把整个数据库的信息可以按照任意条件都能查询到。</code></pre><p>项目中遇到的问题：</p><pre><code class="hljs">    通过注释配url，这个不知道是我的问题，还是beego的问题。配好的url，第一次不起作用，需要把进程关了，然后重新运行。第一次运行会生成一个文件，但是进入url会404，第二次运行就没问题。    beego的orm也很用，很简单的就能和数据库映射。查询外键中的对象很可以查询到，不过一旦用了外键，外键对应的就成为了一个结构体，在发post等请求时，传外键Id时，需要多写一个&#123;&#125;。</code></pre><p>beego笔记：</p><blockquote><p>bee</p></blockquote><pre><code class="hljs">generate    生成代码new         创建pack        打包run         运行</code></pre><blockquote><p>orm</p></blockquote><ul><li><p>qs.RelatedSel() 加载外键</p><pre><code class="hljs">  参数：要加载的外键名字，多层的话，可以使用__</code></pre></li><li><p>qs.Limit(limit, offset)</p></li><li><p>struct</p></li></ul><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> Address <span class="hljs-keyword">struct</span> &#123;<br>Id             <span class="hljs-type">int</span>    <span class="hljs-string">`orm:&quot;column(aid);auto&quot;`</span><br>Uid            *User  <span class="hljs-string">`orm:&quot;column(uid);null;rel(fk)&quot;`</span><br>&#125;<br><span class="hljs-comment">// auto自增、</span><br><span class="hljs-comment">// null可以为空、默认为非空、</span><br><span class="hljs-comment">// auto_now_add;type(datetime) 自动放到当时时间</span><br><span class="hljs-comment">// auto_now;type(datetime) 自动放到当时时间</span><br><span class="hljs-comment">// 区别auto_now_add第一次添加的时间，更新时间不变，auto_now每次更新时间改变</span><br></code></pre></td></tr></table></figure><blockquote><p>Controller</p></blockquote><ul><li><p>router</p></li><li><p>ServeJSON</p></li></ul>]]></content>
+    
+    
+    <categories>
+      
+      <category>Web</category>
+      
+    </categories>
+    
+    
+    <tags>
+      
+      <tag>go</tag>
+      
+      <tag>vue</tag>
+      
+      <tag>beego</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
+    <title>hello world</title>
+    <link href="/notes_person/2017/04/25/hello/"/>
+    <url>/notes_person/2017/04/25/hello/</url>
+    
+    <content type="html"><![CDATA[<h1 id="博客笔记"><a href="#博客笔记" class="headerlink" title="博客笔记"></a>博客笔记</h1><hr><p>自2017年搭建好，再也没用过，两年后的现在<br>重拾博客</p>]]></content>
+    
+    
+    
+  </entry>
+  
+  
+  
+  
+</search>

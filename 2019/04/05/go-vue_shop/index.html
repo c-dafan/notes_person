@@ -1,0 +1,747 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-Hans" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+
+  <link rel="apple-touch-icon" sizes="76x76" href="/notes_person/img/fluid.png">
+  <link rel="icon" href="/notes_person/img/fluid.png">
+  
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="da fan">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="一个购物网站总结一个购物网站，数据库设计如下： 前端nodejs + vue-cli + Vue + Element-UI vue采用element-UI组件。记录一下体验：     vue整体体验很好，通过router和router-view可以很好的提高前端布局代码的复用性。对我这种不擅长写前端，每次写前端ctrl+c，ctrl+v的真的是非常的友好。另外，数据的绑定、一些指令也是相当的好用">
+<meta property="og:type" content="article">
+<meta property="og:title" content="shop_go_vue">
+<meta property="og:url" content="http://c-dafan.github.io/notes_person/2019/04/05/go-vue_shop/index.html">
+<meta property="og:site_name" content="我的笔记">
+<meta property="og:description" content="一个购物网站总结一个购物网站，数据库设计如下： 前端nodejs + vue-cli + Vue + Element-UI vue采用element-UI组件。记录一下体验：     vue整体体验很好，通过router和router-view可以很好的提高前端布局代码的复用性。对我这种不擅长写前端，每次写前端ctrl+c，ctrl+v的真的是非常的友好。另外，数据的绑定、一些指令也是相当的好用">
+<meta property="og:locale">
+<meta property="og:image" content="https://raw.githubusercontent.com/c-dafan/Shop_GoVueWeb/master/shop/static/shop.png">
+<meta property="article:published_time" content="2019-04-05T02:44:58.000Z">
+<meta property="article:modified_time" content="2019-04-06T04:42:54.000Z">
+<meta property="article:author" content="da fan">
+<meta property="article:tag" content="go">
+<meta property="article:tag" content="vue">
+<meta property="article:tag" content="beego">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/c-dafan/Shop_GoVueWeb/master/shop/static/shop.png">
+  
+  
+  
+  <title>shop_go_vue - 我的笔记</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/c/font_1749284_5i9bdhy70f8.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/c/font_1736178_k526ubmyhba.css">
+
+
+<link  rel="stylesheet" href="/notes_person/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/notes_person/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/notes_person/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"c-dafan.github.io","root":"/notes_person/","version":"1.9.8","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false},"umami":{"src":null,"website_id":null,"domains":null,"start_time":"2024-01-01T00:00:00.000Z","token":null,"api_server":null}},"search_path":"/notes_person/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/notes_person/js/utils.js" ></script>
+  <script  src="/notes_person/js/color-schema.js" ></script>
+  
+
+
+  
+<meta name="generator" content="Hexo 6.1.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/notes_person/">
+      <strong>Fluid</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/notes_person/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>Home</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/notes_person/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>Archives</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/notes_person/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>Categories</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/notes_person/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>Tags</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/notes_person/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>About</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/notes_person/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="shop_go_vue"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2019-04-05 10:44" pubdate>
+          April 5, 2019 am
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          1.4k words
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          12 mins
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">shop_go_vue</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <h1 id="一个购物网站总结"><a href="#一个购物网站总结" class="headerlink" title="一个购物网站总结"></a>一个购物网站总结</h1><p>一个购物网站，数据库设计如下：<br><img src="https://raw.githubusercontent.com/c-dafan/Shop_GoVueWeb/master/shop/static/shop.png" srcset="/notes_person/img/loading.gif" lazyload alt="数据库"></p>
+<p>前端nodejs + vue-cli + Vue + Element-UI</p>
+<h2 id="vue"><a href="#vue" class="headerlink" title="vue"></a>vue</h2><p>采用element-UI组件。记录一下体验：</p>
+<pre><code class="hljs">    vue整体体验很好，通过router和router-view可以很好的提高前端布局代码的复用性。对我这种不擅长写前端，每次写前端ctrl+c，ctrl+v的真的是非常的友好。另外，数据的绑定、一些指令也是相当的好用
+    使用vue-cli工具，需要借助nodejs，可以实现前后端的分离。在vue-cli的工程上，目录结构很清晰，很容易写一个前端。不过需要一些nodejs的知识，不然学起来真的很难受。
+    element-UI组件很好使用，不用懂很多css也能写出来很漂亮页面，有种纯写html最后得到带css效果的页面。
+</code></pre>
+<p>笔记：</p>
+<blockquote>
+<p>父子组件通信</p>
+</blockquote>
+<ul>
+<li><p>v-model 数据双向绑定</p>
+</li>
+<li><p>v-on （@）事件</p>
+</li>
+<li><p>v-bind （:） 数据单向绑定</p>
+</li>
+</ul>
+<blockquote>
+<p>内置指令</p>
+</blockquote>
+<ul>
+<li><p>v-if、v-else、v-else-if 条件</p>
+</li>
+<li><p>v-for 循环 （o, i） in objs 其中i是索引，这个顺序好像和我见过的大部分语言相反</p>
+</li>
+</ul>
+<blockquote>
+<p>函数</p>
+</blockquote>
+<ul>
+<li><p>created</p>
+</li>
+<li><p>watch 一直观察这个变量</p>
+</li>
+<li><p>computed 一个变量通过函数结算出来</p>
+</li>
+</ul>
+<blockquote>
+<p>slot、props、scope</p>
+</blockquote>
+<ul>
+<li><p>slot 插槽</p>
+</li>
+<li><p>scope</p>
+</li>
+<li><p>props</p>
+</li>
+</ul>
+<h2 id="beego"><a href="#beego" class="headerlink" title="beego"></a>beego</h2><p>beego体验：</p>
+<pre><code class="hljs">    beego从入门到放弃，没有重新运行解决不了的问题，beego基于mvc三层的一个框架，只要学过其他语言的WEB，入手还是很容易的。
+    学习go语言一天，入手beego，本着练习go语言的原则，写了这个项目。
+    beego有个bee工具，使用起来很容易。bee generate 几乎直接把真的网站的代码都写完了，需要改一些逻辑。生成的controller中GetAll也太恨了，把整个数据库的信息可以按照任意条件都能查询到。
+</code></pre>
+<p>项目中遇到的问题：</p>
+<pre><code class="hljs">    通过注释配url，这个不知道是我的问题，还是beego的问题。配好的url，第一次不起作用，需要把进程关了，然后重新运行。第一次运行会生成一个文件，但是进入url会404，第二次运行就没问题。
+    beego的orm也很用，很简单的就能和数据库映射。查询外键中的对象很可以查询到，不过一旦用了外键，外键对应的就成为了一个结构体，在发post等请求时，传外键Id时，需要多写一个&#123;&#125;。
+</code></pre>
+<p>beego笔记：</p>
+<blockquote>
+<p>bee</p>
+</blockquote>
+<pre><code class="hljs">generate    生成代码
+new         创建
+pack        打包
+run         运行
+</code></pre>
+<blockquote>
+<p>orm</p>
+</blockquote>
+<ul>
+<li><p>qs.RelatedSel() 加载外键</p>
+<pre><code class="hljs">  参数：要加载的外键名字，多层的话，可以使用__
+</code></pre>
+</li>
+<li><p>qs.Limit(limit, offset)</p>
+</li>
+<li><p>struct</p>
+</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs go"><span class="hljs-keyword">type</span> Address <span class="hljs-keyword">struct</span> &#123;<br>	Id             <span class="hljs-type">int</span>    <span class="hljs-string">`orm:&quot;column(aid);auto&quot;`</span><br>	Uid            *User  <span class="hljs-string">`orm:&quot;column(uid);null;rel(fk)&quot;`</span><br>&#125;<br><span class="hljs-comment">// auto自增、</span><br><span class="hljs-comment">// null可以为空、默认为非空、</span><br><span class="hljs-comment">// auto_now_add;type(datetime) 自动放到当时时间</span><br><span class="hljs-comment">// auto_now;type(datetime) 自动放到当时时间</span><br><span class="hljs-comment">// 区别auto_now_add第一次添加的时间，更新时间不变，auto_now每次更新时间改变</span><br></code></pre></td></tr></table></figure>
+
+<blockquote>
+<p>Controller</p>
+</blockquote>
+<ul>
+<li><p>router</p>
+</li>
+<li><p>ServeJSON</p>
+</li>
+</ul>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+    <div class="post-meta mr-3 d-flex align-items-center">
+      <i class="iconfont icon-category"></i>
+      
+
+<span class="category-chains">
+  
+  
+    
+      <span class="category-chain">
+        
+  <a href="/notes_person/categories/Web/" class="category-chain-item">Web</a>
+  
+  
+
+      </span>
+    
+  
+</span>
+
+    </div>
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/notes_person/tags/go/" class="print-no-link">#go</a>
+      
+        <a href="/notes_person/tags/vue/" class="print-no-link">#vue</a>
+      
+        <a href="/notes_person/tags/beego/" class="print-no-link">#beego</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>shop_go_vue</div>
+      <div>http://c-dafan.github.io/notes_person/2019/04/05/go-vue_shop/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>Author</div>
+          <div>da fan</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>Posted on</div>
+          <div>April 5, 2019</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>Licensed under</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - Attribution">
+                    <i class="iconfont icon-cc-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                      <a href="/notes_person/2019/04/07/%E9%9D%A2%E8%AF%95%E5%87%86%E5%A4%87/" title="面试准备">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">面试准备</span>
+                        <span class="visible-mobile">Previous</span>
+                      </a>
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/notes_person/2017/04/25/hello/" title="hello world">
+                        <span class="hidden-mobile">hello world</span>
+                        <span class="visible-mobile">Next</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>Table of Contents</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">Search</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">Keyword</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/notes_person/js/events.js" ></script>
+<script  src="/notes_person/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/notes_person/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/5.0.0/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/notes_person/js/local-search.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/notes_person/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">Blog works best with JavaScript enabled</div>
+  </noscript>
+</body>
+</html>
